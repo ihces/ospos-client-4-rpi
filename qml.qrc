@@ -1,0 +1,20 @@
+<RCC>
+    <qresource prefix="/">
+        <file>main.qml</file>
+        <file>qtquickcontrols2.conf</file>
+        <file>view/page/Accounts.qml</file>
+        <file>view/page/Items.qml</file>
+        <file>view/page/Sale.qml</file>
+        <file>view/images/basket.png</file>
+        <file>view/images/bill.png</file>
+        <file>view/images/cashbook.png</file>
+        <file>view/images/graph.png</file>
+        <file>view/images/invoice.png</file>
+        <file>view/images/settings.png</file>
+        <file>view/images/tag.png</file>
+        <file>view/images/trolley.png</file>
+        <file>view/images/users.png</file>
+        <file>main.cpp</file>
+        <file>view/images/success.png</file>
+    </qresource>
+</RCC>
