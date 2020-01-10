@@ -10,6 +10,16 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(Qt5 COMPONENTS Core Quick REQUIRED)
 
-add_executable(${PROJECT_NAME} "main.cpp" "qml.qrc")
+set(HEADERS
+    "Headers/Services/restrequest.h")
+
+set(SOURCES
+    "Sources/Services/restrequest.cpp"
+    "Sources/main.cpp")
+
+set(RESOURCES
+    "Resources/qml.qrc")
+
+add_executable(${PROJECT_NAME} ${SOURCES} ${HEADERS} ${RESOURCES})
 target_compile_definitions(${PROJECT_NAME} PRIVATE $<$<OR:$<CONFIG:Debug>,$<CONFIG:RelWithDebInfo>>:QT_QML_DEBUG>)
 target_link_libraries(${PROJECT_NAME} PRIVATE Qt5::Core Qt5::Quick)
