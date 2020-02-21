@@ -12,16 +12,15 @@ Page {
     title: qsTr("Satış")
 
     RestRequest {
-        id:pageLoadRequest
+        id:salesRequest
 
         onSessionTimeout: {
-            console.log("sale_timeout");
             salePage.parent.pop();
         }
     }
 
     Component.onCompleted: {
-        pageLoadRequest.get("sales/json", function(code, jsonStr){updateData(JSON.parse(jsonStr))});
+        salesRequest.get("sales/json", function(code, jsonStr){updateData(JSON.parse(jsonStr))});
     }
 
     function updateData(data) {
@@ -73,7 +72,7 @@ Page {
     function searchCustomer() {
         customerNameTextField.customerNameTextCleared = true;
         customerNameTextField.text = customerNameTextField.text.trim();
-        pageLoadRequest.get("customers/search?search="+encodeURIComponent(customerNameTextField.text)+
+        salesRequest.get("customers/search?search="+encodeURIComponent(customerNameTextField.text)+
                             "&order=asc&offset=0&limit=25", function(code, jsonStr){
             var customerList = JSON.parse(jsonStr)["rows"];
             customerListViewModel.clear();
@@ -236,7 +235,7 @@ Page {
                         onDoubleClicked: {
                             selectCustomerItemContainer.ListView.view.currentIndex = index;
                             selectCustomerItemContainer.forceActiveFocus();
-                            pageLoadRequest.post("sales/select_customer/json",{customer: customerListViewModel.get(index).num},
+                            salesRequest.post("sales/select_customer/json",{customer: customerListViewModel.get(index).num},
                                                  function(code, jsonStr){
                                                     updateData(JSON.parse(jsonStr));
                                                     selectCustomerPopup.close();
@@ -381,7 +380,7 @@ Page {
 
                         onDoubleClicked: {
                             suspendItemContainer.forceActiveFocus();
-                            pageLoadRequest.post("sales/unsuspend/json",{suspended_sale_id: suspendedListViewModel.get(index).sale_id, submit: "Satışa+Al"},
+                            salesRequest.post("sales/unsuspend/json",{suspended_sale_id: suspendedListViewModel.get(index).sale_id, submit: "Satışa+Al"},
                                                  function(code, jsonStr){
                                                     updateData(JSON.parse(jsonStr));
                                                     suspendedListPopup.close();
@@ -459,7 +458,7 @@ Page {
 
         onCurrentIndexChanged: {
             if (modeSelectComboBox.enabled && stockSelectComboBox.enabled)
-                pageLoadRequest.post("sales/change_mode/json",
+                salesRequest.post("sales/change_mode/json",
                                      {
                                          mode: modeSelectComboBoxModel.get(modeSelectComboBox.currentIndex).mode,
                                          stock_location: stockSelectComboBoxModel.get(stockSelectComboBox.currentIndex).stock_id
@@ -472,7 +471,7 @@ Page {
 
     TextField {
         id: barcodeTextField
-        font.pointSize: 22
+        font.pointSize: 20
         activeFocusOnTab: true
         focus: true
         anchors.left: modeSelectComboBox.right
@@ -499,7 +498,7 @@ Page {
                 barcodeTextCleared = false
             }
             else {
-                pageLoadRequest.get("items/search",
+                salesRequest.get("items/search",
                                 {"search": barcodeTextField.text, order:"asc", limit: 10, start_date: new Date(2010, 1, 1).toISOString(), end_date: new Date().toISOString(), "filters[]": []},
                                 function(code, jsonStr){updateSearchItemList(JSON.parse(jsonStr))});
             }
@@ -624,7 +623,7 @@ Page {
                     }
 
                     onDoubleClicked: {
-                        pageLoadRequest.post("sales/add/json", {item: itemListModel.get(index).id}, function(code, jsonStr){updateData(JSON.parse(jsonStr))});
+                        salesRequest.post("sales/add/json", {item: itemListModel.get(index).id}, function(code, jsonStr){updateData(JSON.parse(jsonStr))});
                         itemList.visible = false
 
                         barcodeTextField.barcodeTextCleared = true;
@@ -684,7 +683,7 @@ Page {
 
         onCurrentIndexChanged: {
             if (stockSelectComboBox.enabled && modeSelectComboBox.enabled)
-                pageLoadRequest.post("sales/change_mode/json",
+                salesRequest.post("sales/change_mode/json",
                                      {
                                          mode: modeSelectComboBoxModel.get(modeSelectComboBox.currentIndex).mode,
                                          stock_location: stockSelectComboBoxModel.get(stockSelectComboBox.currentIndex).stock_id
@@ -809,7 +808,7 @@ Page {
                                     var selectedItemIdx = cartListView.currentIndex;
                                     var curItemModel = cartListViewModel.get(selectedItemIdx);
                                     if (curItemModel) {
-                                        pageLoadRequest.post("sales/edit_item/" + curItemModel.sale_idx + "/json",
+                                        salesRequest.post("sales/edit_item/" + curItemModel.sale_idx + "/json",
                                                             {quantity: parseInt(value), price: parseFloat(cost)/parseFloat(amount), discount: 0}, function(code, jsonStr){
                                                                 updateData(JSON.parse(jsonStr)); cartListView.currentIndex = selectedItemIdx});
                                     }
@@ -859,7 +858,7 @@ Page {
                                     var selectedItemIdx = container.ListView.view.currentIndex;
                                     var curItemModel = cartListViewModel.get(selectedItemIdx);
                                     if (curItemModel) {
-                                        pageLoadRequest.get("sales/delete_item/" + curItemModel.sale_idx + "/json",
+                                        salesRequest.get("sales/delete_item/" + curItemModel.sale_idx + "/json",
                                                         function(code, jsonStr){
                                                             updateData(JSON.parse(jsonStr));
                                                             if (selectedItemIdx > 0)
@@ -977,7 +976,7 @@ Page {
         }
 
         onClicked: {
-            pageLoadRequest.get("sales/suspended/json", function(code, jsonStr){
+            salesRequest.get("sales/suspended/json", function(code, jsonStr){
                 var suspendedList = JSON.parse(jsonStr)["suspended_sales"];
                 var options = {day: '2-digit', month: '2-digit', year: 'numeric',  hour: '2-digit', minute: '2-digit'};
                 suspendedListViewModel.clear();

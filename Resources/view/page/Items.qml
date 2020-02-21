@@ -1,24 +1,62 @@
 import QtQuick 2.7
 import QtQuick.Controls 2.0
+import posapp.restrequest 1.0
 
 import "../../fonts"
 
 Page {
     id: itemsPage
     width:  800 //parent
-    height:  440 //parent
+    height:  440
+    font.family: "Courier" //parent
 
     title: qsTr("Ürünler")
 
+    RestRequest {
+        id:itemsRequest
+
+        onSessionTimeout: {
+            itemsPage.parent.pop();
+        }
+    }
+
+    function getItems() {
+        var searchObj = {"search": searchTextField.text, order:"asc", limit: 25, start_date: new Date(2010, 1, 1).toISOString(), end_date: new Date().toISOString()};
+
+        switch (selectFilter.currentIndex) {
+        case 1:
+            searchObj["filters[]"] = "empty_upc";
+            break;
+        case 2:
+            searchObj["filters[]"] = "low_inventory";
+            break;
+        case 3:
+            searchObj["filters[]"] = "is_deleted";
+            break;
+        default:
+            searchObj["filters[]"] = "";
+            break;
+        }
+
+        itemsRequest.get("items/search", searchObj, function(code, jsonStr){updateData(JSON.parse(jsonStr))});
+    }
+
+    function updateData(data) {
+        itemListViewModel.clear();
+        for (var cnt = 0; cnt < data.rows.length; ++cnt) {
+            var item = data.rows[cnt];
+
+            itemListViewModel.append({id: item["items.item_id"], num: item.item_number, name: item.name, cost: parseFloat(item.cost_price.replace('₺', '')).toFixed(2) + "₺"});
+        }
+    }
+
     ComboBox {
-        id: typeButton
-        KeyNavigation.left: searchTextField
-        KeyNavigation.down: listMenu
+        id: selectFilter
         anchors.left: parent.left
         anchors.top: parent.top
         anchors.topMargin: 4
         anchors.leftMargin: 4
-        model:["Tüm", "Dükkan", "Depo"]
+        model:["Tüm", "Barkodsuz", "Tükenmiş", "Silinmiş"]
         spacing: 5
         height: 50
         padding: 10
@@ -31,24 +69,29 @@ Page {
             color: parent.activeFocus?"dodgerblue":"lightslategray"
             radius: 0
         }
+
+        onCurrentIndexChanged: {
+            getItems();
+        }
     }
 
     TextField {
         id: searchTextField
-        font.pointSize: 22
+        font.pointSize: 20
         activeFocusOnTab: true
         focus: true
-        anchors.left: typeButton.right
+        anchors.left: selectFilter.right
+        anchors.right: newItemButton.left
         anchors.top: parent.top
         anchors.leftMargin: 4
+        anchors.rightMargin: 4
         anchors.topMargin: 4
-        width: parent.width - 316
         height: 50
         leftPadding: 10
         topPadding: 8
         font.family: Fonts.fontOrbitronRegular.name
         placeholderText: "Ürün Adı veya Barkod"
-        KeyNavigation.right: selectCustButton
+        KeyNavigation.right: selectFilter
         KeyNavigation.down: listMenu
         background: Rectangle {
             border.color: parent.activeFocus?"dodgerblue":"lightslategray"
@@ -56,12 +99,13 @@ Page {
             color: parent.activeFocus ?"dodgerblue": "white"
         }
         color: activeFocus ? "white": "#545454"
+        onTextChanged: {
+            getItems();
+        }
     }
 
     Button {
-        id: selectCustButton
-        KeyNavigation.left: searchTextField
-        KeyNavigation.down: listMenu
+        id: newItemButton
         anchors.right: parent.right
         anchors.top: parent.top
         anchors.topMargin: 4
@@ -72,35 +116,23 @@ Page {
         height: 50
         width: 150
         padding: 10
-        checkable: true
         font.pixelSize: 28
         font.family: Fonts.fontBarlowRegular.name
-        Keys.onPressed: {
-            if (event.key === Qt.Key_Enter || event.key === Qt.Key_Return) {
-                checked = true
-                console.log("musteri sec enter")
-                itemList.visible = true
-                itemList.forceActiveFocus()
-            }
-        }
-
         background: Rectangle{
             anchors.fill:parent
-            color: parent.checked?"steelblue": (parent.activeFocus?"dodgerblue":"lightslategray")
-        }
-
-        Keys.onReleased: {
-            checked = false
+            color: parent.activeFocus?"dodgerblue":"lightslategray"
         }
     }
 
     FocusScope {
         id: listMenu
         width: parent.width
-        anchors.top: typeButton.bottom
-        anchors.bottom: parent.bottom
+        anchors.top: searchTextField.bottom
+        anchors.bottom: editDelete.visible? editDelete.top:parent.bottom
         anchors.topMargin: 4
         activeFocusOnTab: true
+
+        onActiveFocusChanged: {console.log(focus)}
 
         clip: true
 
@@ -118,33 +150,8 @@ Page {
             /*Keys.onLeftPressed: {
               drawer.open()
             }*/
-            model: ListModel{
-             ListElement{
-                 num: 81
-                name: "Torku Banada 700 Gr"
-                cost: "10,00₺"
-             }
-             ListElement{
-                 num: 41
-                name: "Ankara Nuh Makarna Burgu Paket"
-                cost: "40,00₺"
-             }
-             ListElement{
-                 num: 25
-                name: "Safia Diş Macunu 150 ml"
-                cost: "7,8₺"
-             }
-             ListElement{
-                 num: 38
-                name: "VIP 3ü Bir Arada 50 Gr"
-                cost: "5,75₺"
-             }
-             ListElement{
-                num: 16
-                name: "Kılıçoğlu Tereyağı Kg"
-                cost: "10,00₺"
-             }
-            }
+
+            model: ListModel{id: itemListViewModel}
             cacheBuffer: 200
             delegate: Item {
                 id: container
@@ -217,7 +224,7 @@ Page {
                         listMenu.height = 160
                     }
                     onDoubleClicked: {
-                        itemsPage.parent.push('Account.qml')
+                        itemsPage.parent.push('Item.qml', {item_id: itemListViewModel.get(index).id})
                     }
                 }
 
@@ -251,15 +258,19 @@ Page {
         }
     }
 
-    Rectangle {
+    FocusScope {
         id: editDelete
         anchors.bottom: parent.bottom
         anchors.left: parent.left
         width: parent.width
         height: 190
         visible: false
-        color: "#f7f8f9"
+        Rectangle {
+            anchors.fill: parent
+            color: "#f7f8f9"
+        }
 
+        onActiveFocusChanged: {console.log("asdasd" + focus);}
         TextField {
             id: barcodeTextField
             font.pointSize: 16
@@ -269,13 +280,12 @@ Page {
             anchors.top: parent.top
             anchors.leftMargin: 4
             anchors.topMargin: 4
-            width: parent.width / 3 - 7
+            width: parent.width / 3 - 5.33
             height: 40
             leftPadding: 10
             font.family: Fonts.fontRubikRegular.name
-            horizontalAlignment: horizontalCenter
             placeholderText: "Barkod No"
-            KeyNavigation.right: selectCustButton
+            KeyNavigation.right: selectFilter
             KeyNavigation.down: listMenu
             background: Rectangle {
                 border.color: parent.activeFocus?"dodgerblue":"lightslategray"
@@ -294,12 +304,12 @@ Page {
             anchors.top: parent.top
             anchors.leftMargin: 4
             anchors.topMargin: 4
-            width: parent.width / 3 - 7
+            width: parent.width / 3 - 5.33
             height: 40
             leftPadding: 10
             font.family: Fonts.fontRubikRegular.name
             placeholderText: "Ürün Adı"
-            KeyNavigation.right: selectCustButton
+            KeyNavigation.right: selectFilter
             KeyNavigation.down: listMenu
             background: Rectangle {
                 border.color: parent.activeFocus?"dodgerblue":"lightslategray"
@@ -319,11 +329,14 @@ Page {
             anchors.top: parent.top
             anchors.rightMargin: 4
             anchors.topMargin: 4
-            width: parent.width / 3 - 7
+            width: parent.width / 3 - 5.33
             height: 40
+            currentIndex: -1
+            displayText: currentIndex === -1 ? "Kategori" : currentText
+            model: ["süt", "et", "hazır gıda"]
             leftPadding: 10
             font.family: Fonts.fontRubikRegular.name
-            KeyNavigation.right: selectCustButton
+            KeyNavigation.right: selectFilter
             KeyNavigation.down: listMenu
             background: Rectangle {
                 border.color: parent.activeFocus?"dodgerblue":"lightslategray"
@@ -333,7 +346,6 @@ Page {
         }
 
         ComboBox {
-            editable: true
             id: companyTextField
             font.pointSize: 16
             activeFocusOnTab: true
@@ -342,11 +354,12 @@ Page {
             anchors.top: barcodeTextField.bottom
             anchors.leftMargin: 4
             anchors.topMargin: 4
-            width: parent.width / 3 - 7
+            width: parent.width / 3 - 5.33
             height: 40
             leftPadding: 10
+            displayText: currentIndex === -1 ? "Sağlayıcı" : currentText
             font.family: Fonts.fontRubikRegular.name
-            KeyNavigation.right: selectCustButton
+            KeyNavigation.right: selectFilter
             KeyNavigation.down: listMenu
             background: Rectangle {
                 border.color: parent.activeFocus?"dodgerblue":"lightslategray"
@@ -364,12 +377,12 @@ Page {
             anchors.top: itemNameTextField.bottom
             anchors.leftMargin: 4
             anchors.topMargin: 4
-            width: parent.width / 3 - 7
+            width: parent.width / 3 - 5.33
             height: 40
             leftPadding: 10
             font.family: Fonts.fontRubikRegular.name
             placeholderText: "Maliyet Fiyatı"
-            KeyNavigation.right: selectCustButton
+            KeyNavigation.right: selectFilter
             KeyNavigation.down: listMenu
             background: Rectangle {
                 border.color: parent.activeFocus?"dodgerblue":"lightslategray"
@@ -388,12 +401,12 @@ Page {
             anchors.top: categoryTextField.bottom
             anchors.rightMargin: 4
             anchors.topMargin: 4
-            width: parent.width / 3 - 7
+            width: parent.width / 3 - 5.33
             height: 40
             leftPadding: 10
             font.family: Fonts.fontRubikRegular.name
             placeholderText: "Satış Fiyatı"
-            KeyNavigation.right: selectCustButton
+            KeyNavigation.right: selectFilter
             KeyNavigation.down: listMenu
             background: Rectangle {
                 border.color: parent.activeFocus?"dodgerblue":"lightslategray"
@@ -412,12 +425,12 @@ Page {
             anchors.top: companyTextField.bottom
             anchors.leftMargin: 4
             anchors.topMargin: 4
-            width: parent.width / 3 - 7
+            width: parent.width / 3 - 5.33
             height: 40
             leftPadding: 10
             font.family: Fonts.fontRubikRegular.name
             placeholderText: "Vergi 1"
-            KeyNavigation.right: selectCustButton
+            KeyNavigation.right: selectFilter
             KeyNavigation.down: listMenu
             background: Rectangle {
                 border.color: parent.activeFocus?"dodgerblue":"lightslategray"
@@ -436,12 +449,12 @@ Page {
             anchors.top: costPriceTextField.bottom
             anchors.leftMargin: 4
             anchors.topMargin: 4
-            width: parent.width / 3 - 7
+            width: parent.width / 3 - 5.33
             height: 40
             leftPadding: 10
             font.family: Fonts.fontRubikRegular.name
             placeholderText: "Vergi 2"
-            KeyNavigation.right: selectCustButton
+            KeyNavigation.right: selectFilter
             KeyNavigation.down: listMenu
             background: Rectangle {
                 border.color: parent.activeFocus?"dodgerblue":"lightslategray"
@@ -460,12 +473,12 @@ Page {
             anchors.top: salePriceTextField.bottom
             anchors.rightMargin: 4
             anchors.topMargin: 4
-            width: parent.width / 3 - 7
+            width: parent.width / 3 - 5.33
             height: 40
             leftPadding: 10
             font.family: Fonts.fontRubikRegular.name
-            placeholderText: "Stok"
-            KeyNavigation.right: selectCustButton
+            placeholderText: "Açıklama"
+            KeyNavigation.right: selectFilter
             KeyNavigation.down: listMenu
             background: Rectangle {
                 border.color: parent.activeFocus?"dodgerblue":"lightslategray"

@@ -1,5 +1,6 @@
 import QtQuick 2.7
 import QtQuick.Controls 2.0
+import posapp.restrequest 1.0
 
 import "../../fonts"
 
@@ -10,9 +11,31 @@ Page {
 
     title: qsTr("Hesaplar")
 
+    RestRequest {
+        id:accountsRequest
+
+        onSessionTimeout: {
+            accountsPage.parent.pop();
+        }
+    }
+
+    function getCustomers() {
+        var searchObj = {"search": searchTextField.text, order:"asc", offset: 0, limit: 25};
+
+        accountsRequest.get("customers/search", searchObj, function(code, jsonStr){updateData(JSON.parse(jsonStr))});
+    }
+
+    function updateData(data) {
+        customerListViewModel.clear();
+        for (var cnt = 0; cnt < data.rows.length; ++cnt) {
+            var customer = data.rows[cnt];
+            customerListViewModel.append({id: customer["people.person_id"], name: customer.first_name + ' ' + customer.last_name, total: parseFloat(customer.total.replace('₺', '')).toFixed(2) + "₺"});
+        }
+    }
+
     ComboBox {
         id: typeButton
-        KeyNavigation.left: barcodeTextField
+        KeyNavigation.left: searchTextField
         KeyNavigation.down: listMenu
         anchors.left: parent.left
         anchors.top: parent.top
@@ -31,11 +54,15 @@ Page {
             color: parent.activeFocus?"dodgerblue":"lightslategray"
             radius: 0
         }
+
+        onCurrentIndexChanged: {
+            getCustomers();
+        }
     }
 
     TextField {
-        id: barcodeTextField
-        font.pointSize: 22
+        id: searchTextField
+        font.pointSize: 20
         activeFocusOnTab: true
         focus: true
         anchors.left: typeButton.right
@@ -49,7 +76,7 @@ Page {
         font.family: Fonts.fontOrbitronRegular.name
         verticalAlignment: "AlignVCenter"
         placeholderText: "Müşteri Ara"
-        KeyNavigation.right: selectCustButton
+        KeyNavigation.right: newCustomerButton
         KeyNavigation.down: listMenu
         background: Rectangle {
             border.color: parent.activeFocus?"dodgerblue":"lightslategray"
@@ -60,8 +87,8 @@ Page {
     }
 
     Button {
-        id: selectCustButton
-        KeyNavigation.left: barcodeTextField
+        id: newCustomerButton
+        KeyNavigation.left: searchTextField
         KeyNavigation.down: listMenu
         anchors.right: parent.right
         anchors.top: parent.top
@@ -99,7 +126,7 @@ Page {
         id: listMenu
         y: 70
         width: parent.width
-        anchors.top: selectCustButton.bottom
+        anchors.top: newCustomerButton.bottom
         anchors.bottom: parent.bottom
         anchors.topMargin: 4
         activeFocusOnTab: true
@@ -117,42 +144,13 @@ Page {
             id: list1
             width: parent.width; height: parent.height
             focus: true
-            /*Keys.onLeftPressed: {
-              drawer.open()
-            }*/
             model: ListModel{
-             ListElement{
-                 num: 81
-                name: "İbrahim Hakkı ÇEŞME"
-                cost: "10,00₺"
-             }
-             ListElement{
-                 num: 41
-                name: "Mehmet KARTALKAYA"
-                cost: "40,00₺"
-             }
-             ListElement{
-                 num: 25
-                name: "Ahmet PALANDÖKEN"
-                cost: "7,8₺"
-             }
-             ListElement{
-                 num: 38
-                name: "Kaya ERCİYES"
-                cost: "5,75₺"
-             }
-             ListElement{
-                num: 16
-                name: "Umut ULUDAĞ"
-                cost: "10,00₺"
-             }
+                id: customerListViewModel
             }
             cacheBuffer: 200
             delegate: Item {
                 id: container
                 width: ListView.view.width; height: 50; anchors.leftMargin: 4; anchors.rightMargin: 4
-
-
                 Rectangle {
                     id: content
                     anchors.centerIn: parent; width: container.width - 20; height: container.height - 10
@@ -167,7 +165,7 @@ Page {
                         color: "transparent"
                         Text {
                             id: label
-                            text: num
+                            text: id
                             color: "#545454"
                             font.pixelSize: 20
                             horizontalAlignment: Text.AlignHCenter
@@ -196,7 +194,7 @@ Page {
                             horizontalAlignment: Text.AlignRight
                             anchors.rightMargin: 4
                             anchors.right : parent.right
-                            text: cost
+                            text: total
                             color: "#545454"
                             font.pixelSize: 24
                             font.family: Fonts.fontIBMPlexMonoRegular.name
@@ -219,7 +217,7 @@ Page {
                         listMenu.height = 160
                     }
                     onDoubleClicked: {
-                        accountsPage.parent.push('Account.qml')
+                        accountsPage.parent.push('Account.qml', {cust_id:  customerListViewModel.get(index).id})
                     }
                 }
 
@@ -277,7 +275,7 @@ Page {
             font.family: Fonts.fontRubikRegular.name
             horizontalAlignment: horizontalCenter
             placeholderText: "Adı"
-            KeyNavigation.right: selectCustButton
+            KeyNavigation.right: newCustomerButton
             KeyNavigation.down: listMenu
             background: Rectangle {
                 border.color: parent.activeFocus?"dodgerblue":"lightslategray"
@@ -301,7 +299,7 @@ Page {
             leftPadding: 10
             font.family: Fonts.fontRubikRegular.name
             placeholderText: "Soyadı"
-            KeyNavigation.right: selectCustButton
+            KeyNavigation.right: newCustomerButton
             KeyNavigation.down: listMenu
             background: Rectangle {
                 border.color: parent.activeFocus?"dodgerblue":"lightslategray"
@@ -325,7 +323,7 @@ Page {
             leftPadding: 10
             font.family: Fonts.fontRubikRegular.name
             placeholderText: "Telefon"
-            KeyNavigation.right: selectCustButton
+            KeyNavigation.right: newCustomerButton
             KeyNavigation.down: listMenu
             background: Rectangle {
                 border.color: parent.activeFocus?"dodgerblue":"lightslategray"
@@ -349,7 +347,7 @@ Page {
             leftPadding: 10
             font.family: Fonts.fontRubikRegular.name
             placeholderText: "E-Posta"
-            KeyNavigation.right: selectCustButton
+            KeyNavigation.right: newCustomerButton
             KeyNavigation.down: listMenu
             background: Rectangle {
                 border.color: parent.activeFocus?"dodgerblue":"lightslategray"
@@ -373,7 +371,7 @@ Page {
             leftPadding: 10
             font.family: Fonts.fontRubikRegular.name
             placeholderText: "Adres"
-            KeyNavigation.right: selectCustButton
+            KeyNavigation.right: newCustomerButton
             KeyNavigation.down: listMenu
             background: Rectangle {
                 border.color: parent.activeFocus?"dodgerblue":"lightslategray"
@@ -397,7 +395,7 @@ Page {
             leftPadding: 10
             font.family: Fonts.fontRubikRegular.name
             placeholderText: "Yorum"
-            KeyNavigation.right: selectCustButton
+            KeyNavigation.right: newCustomerButton
             KeyNavigation.down: listMenu
             background: Rectangle {
                 border.color: parent.activeFocus?"dodgerblue":"lightslategray"
@@ -409,7 +407,7 @@ Page {
 
         Button {
             id: deleteCustButton
-            KeyNavigation.left: barcodeTextField
+            KeyNavigation.left: searchTextField
             KeyNavigation.down: listMenu
             anchors.left: parent.left
             anchors.bottom: parent.bottom
@@ -445,7 +443,7 @@ Page {
 
         Button {
             id: saveCustButton
-            KeyNavigation.left: barcodeTextField
+            KeyNavigation.left: searchTextField
             KeyNavigation.down: listMenu
             anchors.right: parent.right
             anchors.bottom: parent.bottom

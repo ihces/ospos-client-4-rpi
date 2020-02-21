@@ -51,5 +51,6 @@
         <file>fonts/product/Tomorrow-Regular.ttf</file>
         <file>view/images/bracket.png</file>
         <file>fonts/product/Tomorrow-SemiBold.ttf</file>
+        <file>view/page/Item.qml</file>
     </qresource>
 </RCC>

@@ -276,7 +276,7 @@ Page {
 
     TextField {
         id: paymentTextField
-        font.pointSize: 22
+        font.pointSize: 20
         activeFocusOnTab: true
         focus: true
         anchors.left: typeButton.right

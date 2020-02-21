@@ -6,58 +6,62 @@ import posapp.restrequest 1.0
 import "../../fonts"
 
 Page {
-    id: paymentPage
+    id: itemPage
     width:  800 //parent
     height:  440 //parent
+    property int item_id
+    property var item_transactions
+    property var itemQuantities
+    property var employees
 
-    title: qsTr("Alacak Hesabı")
-
-    property int cust_id
+    title: qsTr("Ürün Detayı")
 
     RestRequest {
-        id:accountRequest
+        id:itemRequest
 
         onSessionTimeout: {
-            accountsPage.parent.pop();
+            salePage.parent.pop();
         }
     }
 
     Component.onCompleted: {
-        getTransactions();
-    }
-
-    function getTransactions() {
-        var searchObj = {start_date: new Date(2010, 1, 1).toISOString(), end_date: new Date().toISOString()};
-
-        accountRequest.get("sales/get_transactions/" + cust_id, searchObj, function(code, jsonStr){updateData(JSON.parse(jsonStr))});
+        itemRequest.get("items/count_details/" + itemPage.item_id + "/json", function(code, jsonStr){updateData(JSON.parse(jsonStr))});
     }
 
     function updateData(data) {
-        transactionListViewModel.clear();
-        if (data.length > 0)
-            accountName.text = data[0].customer_name;
-        var totalDue = 0.0;
-        for (var cnt = 0; cnt < data.length; ++cnt) {
-            var sale = data[cnt];
+        barcodeText.text = data.item_info.item_number;
+        itemNameText.text = data.item_info.name;
 
-            var saleTypeStr="Satış";
-            if (sale.sale_type === "4")
-                saleTypeStr = "İade";
-
-            var amountDue = parseFloat(sale.amount_due.replace(/[₺|.]/g, '').replace(',', '.'));
-
-            var payments = sale.payment_type.split(',');
-            var remainAmount = 0.0;
-            for (var cnt1 =0; cnt1 < payments.length; ++ cnt1)
-                if (payments[cnt1].startsWith("Due")) {
-                    remainAmount = parseFloat(payments[cnt1].split(' ')[1]);
-                    break;
-                }
-            totalDue += remainAmount;
-            transactionListViewModel.append({id: sale["sale_id"], date: sale.sale_time, type: saleTypeStr, cost: amountDue.toFixed(2)+ "₺", payment: (amountDue-remainAmount).toFixed(2) + "₺", remain: remainAmount.toFixed(2)+ "₺"});
+        itemPage.item_transactions = data.inventory;
+        itemPage.employees = data.employees;
+        itemPage.itemQuantities = data.item_quantities;
+        var location_keys = Object.keys(data.stock_locations);
+        for (var cnt = 0; cnt < location_keys.length; ++cnt) {
+            stockSelectComboBoxModel.append({
+                                                name: data.stock_locations[location_keys[cnt]],
+                                                stock_id: location_keys[cnt]
+                                            });
         }
 
-        totalCost.text = totalDue.toFixed(2) + "₺";
+    }
+
+    function updateTransactionList() {
+        var options = {day: '2-digit', month: '2-digit', year: 'numeric',  hour: '2-digit', minute: '2-digit'};
+        itemTransactionListModel.clear();
+        var currentStockId = stockSelectComboBoxModel.get(selectStock.currentIndex).stock_id;
+
+        stockQuantity.text = itemPage.itemQuantities[currentStockId];
+
+        for (var cnt = 0; cnt < itemPage.item_transactions.length; ++cnt) {
+            var transaction = itemPage.item_transactions[cnt];
+            if (currentStockId === transaction["trans_location"])
+                itemTransactionListModel.append({
+                                                date: new Date(transaction["trans_date"]).toLocaleString("tr-TR", options),
+                                                user: itemPage.employees[transaction["trans_user"]],
+                                                description: transaction["trans_comment"],
+                                                quantity: transaction["trans_inventory"]
+                                            });
+        }
     }
 
     SoundEffect {
@@ -65,70 +69,67 @@ Page {
         source: "../../sounds/220197-click-basic.wav"
     }
 
-    Rectangle {
-        id: accountTitleLeft
-        width: 170
+    ComboBox {
+        id: selectLastTransactionsByDate
+        KeyNavigation.down: listMenu
         anchors.left: parent.left
         anchors.top: parent.top
-        anchors.leftMargin: 0
-        antialiasing: true;
-        color: "#d6e6f6"
+        anchors.topMargin: 4
+        anchors.leftMargin: 4
+        model:["Tüm Zamanlar", "Bugün", "Dün", "Geçen Hafta", "Geçen Ay", "Geçen 3 Ay", "Geçen 6 Ay", "Geçen Yıl"]
+        spacing: 5
         height: 50
-        Text {
-            id: accountStartDate
-            y: 3
-            text: "İlk İşlem: 01/01/2018\nSon İşlem: 12/01/2018"
-            color: "#545454"
-            font.pixelSize: 14
-            font.family: Fonts.fontRubikRegular.name
-            anchors.left: parent.left
-            width: parent.width
-            height: parent.height
-            verticalAlignment: Text.AlignVCenter
-            horizontalAlignment: Text.AlignLeft
-            anchors.top: parent.top
-            anchors.topMargin: 3
-            leftPadding: 7
+        padding: 10
+        font.pixelSize: 18
+        font.family: Fonts.fontBarlowRegular.name
+        width: 150
+        background: Rectangle{
+            implicitHeight: parent.height
+            implicitWidth: parent.width
+            color: parent.activeFocus?"dodgerblue":"lightslategray"
+            radius: 0
         }
     }
 
-    Rectangle {
-        id: accountTitleRight
-        width: 170
+    ComboBox {
+        id: selectStock
+        KeyNavigation.down: listMenu
         anchors.right: parent.right
         anchors.top: parent.top
-        antialiasing: true;
-        color: "#d6e6f6"
+        anchors.topMargin: 4
+        anchors.rightMargin: 4
+        model:ListModel{id: stockSelectComboBoxModel}
+        textRole: "name"
+        spacing: 5
         height: 50
-        Text {
-            id: accountStartAddress
-            text: "T 0531 456 7854\nSaltuklu Mah. Erva Sok. No: 1 Aziziye/Erzurum"
-            wrapMode: Text.WordWrap
-            color: "#545454"
-            font.pixelSize: 11
-            font.family: Fonts.fontRubikRegular.name
-            anchors.right: parent.right
-            width: parent.width
-            height: parent.height
-            verticalAlignment: Text.AlignVCenter
-            horizontalAlignment: Text.AlignRight
-            anchors.top: parent.top
-            anchors.topMargin: 3
-            rightPadding: 7
+        padding: 10
+        font.pixelSize: 28
+        font.family: Fonts.fontBarlowRegular.name
+        width: 150
+        background: Rectangle{
+            implicitHeight: parent.height
+            implicitWidth: parent.width
+            color: parent.activeFocus?"dodgerblue":"lightslategray"
+            radius: 0
+        }
+        onCurrentIndexChanged: {
+            updateTransactionList();
         }
     }
 
     Rectangle {
         id: accountTitle
-        width: parent.width - 340
-        anchors.left: accountTitleLeft.right
+        anchors.right: selectStock.left
+        anchors.left: selectLastTransactionsByDate.right
         anchors.top: parent.top
         antialiasing: true;
+        anchors.leftMargin: 4
+        anchors.rightMargin: 4
         color: "#d6e6f6"
-        height: 50
+        height: 58
         Text {
-            id: accountNum
-            text: cust_id
+            id: barcodeText
+            text: ""
             color: "#545454"
             font.pixelSize: 14
             font.family: Fonts.fontRubikRegular.name
@@ -139,8 +140,8 @@ Page {
             anchors.topMargin: 0
         }
         Text {
-            id: accountName
-            text: "İbrahim Hakkı ÇEŞME"
+            id: itemNameText
+            text: ""
             anchors.topMargin: -6
             color: "#545454"
             font.pixelSize: 32
@@ -148,15 +149,17 @@ Page {
             anchors.left: parent.left
             width: parent.width
             horizontalAlignment: Text.AlignHCenter
-            anchors.top: accountNum.bottom
+            anchors.top: barcodeText.bottom
         }
     }
 
     FocusScope {
-        id: transactionList
+        id: listMenu
         y: 50
         width: parent.width
-        height: parent.height - 110
+        height: parent.height - 116
+        anchors.top: selectStock.bottom
+        anchors.topMargin: 4
         activeFocusOnTab: true
 
         clip: true
@@ -165,16 +168,16 @@ Page {
             width: parent.width
             anchors.top: parent.top
             height: 2
-            color: transactionListView.activeFocus?"dodgerblue":"slategray"
+            color: list1.activeFocus?"dodgerblue":"slategray"
         }
 
         ListView {
-            id: transactionListView
-            width: parent.width; height: parent.height
+            id: list1
+            width: parent.width
+            height: parent.height
             focus: true
-            KeyNavigation.down: paymentButton
             model: ListModel{
-                 id: transactionListViewModel
+                id: itemTransactionListModel
             }
             cacheBuffer: 200
             delegate: Item {
@@ -197,65 +200,49 @@ Page {
                         Text {
                             id: label1
                             text: date
-                            color: type == "Satış" ? "#545454": "crimson"
-                            font.pixelSize: 16
+                            color: "#545454"
+                            font.pixelSize: 20
                             font.family: Fonts.fontRubikRegular.name
                             anchors.left: parent.left
-                            width: parent.width/3
+                            width: 200
                             horizontalAlignment: Text.AlignHCenter
                             anchors.top: parent.top
                             anchors.topMargin: 7
                         }
                         Text {
                             id: label2
-                            text: type
-                            color: type == "Satış" ? "#545454": "crimson"
-                            font.pixelSize: 18
+                            text: user
+                            color: "#545454"
+                            font.pixelSize: 20
                             font.family: Fonts.fontRubikRegular.name
-                            width: parent.width/6
                             anchors.left: label1.right
-                            anchors.leftMargin: 20
+                            width: 150
+                            horizontalAlignment: Text.AlignHCenter
                             anchors.top: parent.top
                             anchors.topMargin: 7
                         }
                         Text {
                             id: label3
-                            horizontalAlignment: Text.AlignRight
-                            anchors.rightMargin: 4
-                            anchors.right : label4.left
-                            text: cost
-                            color: type == "Satış" ? "#545454": "crimson"
+                            text: description
+                            color: "#545454"
                             font.pixelSize: 20
-                            font.family: Fonts.fontIBMPlexMonoRegular.name
-                            width: parent.width/6
+                            font.family: Fonts.fontRubikRegular.name
+                            width: parent.width - 500
+                            anchors.left: label2.right
+                            anchors.leftMargin: 20
                             anchors.top: parent.top
-                            anchors.topMargin: 4
+                            anchors.topMargin: 7
                         }
-
                         Text {
                             id: label4
                             horizontalAlignment: Text.AlignRight
                             anchors.rightMargin: 4
-                            anchors.right : label5.left
-                            text: payment
-                            color: type == "Satış" ? "#545454": "crimson"
-                            font.pixelSize: 20
-                            font.family: Fonts.fontIBMPlexMonoRegular.name
-                            width: parent.width/6
-                            anchors.top: parent.top
-                            anchors.topMargin: 4
-                        }
-
-                        Text {
-                            id: label5
-                            horizontalAlignment: Text.AlignRight
-                            anchors.rightMargin: 4
                             anchors.right : parent.right
-                            text: remain
-                            color: type == "Satış" ? "#545454": "crimson"
+                            text: quantity
+                            color: "#545454"
                             font.pixelSize: 24
                             font.family: Fonts.fontIBMPlexMonoRegular.name
-                            width: parent.width/6
+                            width: 150
                             anchors.top: parent.top
                             anchors.topMargin: 4
                         }
@@ -277,11 +264,10 @@ Page {
                 states: State {
                     name: "active"; when: container.activeFocus
                     PropertyChanges { target: content; color: "dodgerblue"; height: 50; width: container.width - 10; anchors.leftMargin: 10; anchors.rightMargin: 10 }
-                    PropertyChanges { target: label1; font.pixelSize: 20; font.bold: true; color: "white" }
+                    PropertyChanges { target: label1; font.pixelSize: 24; font.bold: true; color: "white" }
                     PropertyChanges { target: label2; font.pixelSize: 24; font.bold: true; color: "white" }
                     PropertyChanges { target: label3; font.pixelSize: 24; font.bold: true; color: "white" }
-                    PropertyChanges { target: label4; font.pixelSize: 24; font.bold: true; color: "white" }
-                    PropertyChanges { target: label5; font.pixelSize: 28; color: "white"; font.family: Fonts.fontIBMPlexMonoSemiBold.name }
+                    PropertyChanges { target: label4; font.pixelSize: 28; color: "white"; font.family: Fonts.fontIBMPlexMonoSemiBold.name }
                 }
 
                 transitions: Transition {
@@ -302,91 +288,80 @@ Page {
             width: parent.width
             anchors.bottom: parent.bottom
             height: 2
-            color: transactionListView.activeFocus?"dodgerblue":"slategray"
+            color: list1.activeFocus?"dodgerblue":"slategray"
         }
     }
 
     Rectangle {
         anchors.bottom: parent.bottom
-        anchors.left: printButton.right
+        anchors.left: updateStockButton.right
         width: parent.width - 316
         height: 50
 
         Label {
             id: itemNum
-            text: "Kalan Tutar:"
+            text: "Stok Miktarı:"
             width: parent.width
             anchors.top: parent.top
-            anchors.topMargin: -11
+            anchors.topMargin: -8
             horizontalAlignment: "AlignHCenter"
             font.family: "Arial"
             font.pointSize: 12
-            color: "crimson"
+            color: "steelblue"
         }
         Label {
-            id: totalCost
+            id: stockQuantity
             anchors.top: itemNum.bottom
-            anchors.topMargin: -14
+            anchors.topMargin: -12
             horizontalAlignment: "AlignHCenter"
             width: parent.width
-            text: "0,00₺"
+            text: "0"
             font.family: Fonts.fontIBMPlexMonoRegular.name
             font.pointSize: 32
             font.bold: true
-            color: "crimson"
+            color: "steelblue"
         }
     }
+
     Button {
-        id:printButton
+        id:updateStockButton
         anchors.left: parent.left
         anchors.bottom: parent.bottom
         anchors.bottomMargin: 4
         anchors.leftMargin: 4
-        text: "Özet Yazdır"
+        text: "Stoğu Güncelle"
         spacing: 5
         autoExclusive: false
         height: 50
-        width: 160
+        width: 150
+        padding: 10
+        checkable: true
+        font.family: Fonts.fontBarlowRegular.name
+        font.pointSize: 18
+        background: Rectangle{
+            anchors.fill:parent
+            color: parent.activeFocus?"darksalmon":"salmon"
+        }
+    }
+
+    Button {
+        id:printButton
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: 4
+        anchors.rightMargin: 4
+        text: "Barkod Yazdır"
+        spacing: 5
+        autoExclusive: false
+        height: 50
+        width: 150
         padding: 10
         checkable: true
         font.family: Fonts.fontBarlowRegular.name
         font.pointSize: 20
         background: Rectangle{
             anchors.fill:parent
-            color: parent.checked?"steelblue": (parent.activeFocus?"dodgerblue":"slategray")
-        }
-    }
-
-    Button {
-        id:paymentButton
-        anchors.right: parent.right
-        anchors.bottom: parent.bottom
-        anchors.bottomMargin: 4
-        anchors.rightMargin: 4
-        text: "Ödeme Yap"
-        spacing: 5
-        autoExclusive: false
-        height: 50
-        width: 160
-        padding: 10
-        checkable: true
-        font.family: Fonts.fontBarlowRegular.name
-        font.pointSize: 24
-        Keys.onPressed: {
-            if (event.key === Qt.Key_Enter || event.key === Qt.Key_Return) {
-                checked = true
-                console.log("odeme enter")
-                paymentPage.parent.pop()
-            }
-        }
-
-        background: Rectangle{
-            anchors.fill:parent
-            color: parent.checked?"steelblue": (parent.activeFocus?"crimson":"indianred")
-        }
-
-        Keys.onReleased: {
-            checked = false
+            color: parent.activeFocus?"dodgerblue":"slategray"
         }
     }
 }
