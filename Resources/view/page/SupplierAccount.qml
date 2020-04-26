@@ -13,7 +13,7 @@ Page {
 
     title: qsTr("Satıcı Hesabı")
 
-    property int supplier_id
+    property int person_id
     property string phone
     property string address
     property int busyIndicatorCnt: 0
@@ -36,7 +36,6 @@ Page {
     Component.onCompleted: {
         phoneAndAddress.text = "Tel: "+ phone + "\nAdres: " + address;
         selectLastTransactionsByDate.currentIndex = 6
-        updateTotalDue();
     }
 
     ReceiptPopup {
@@ -82,40 +81,17 @@ Page {
         }
         var searchObj = {start_date: startDateStr, end_date: endDateStr};
 
-        accountRequest.get("receivings/get_transactions/" + supplier_id, searchObj, function(code, jsonStr){updateData(JSON.parse(jsonStr))});
+        accountRequest.get("receivings/get_transactions/" + person_id, searchObj, function(code, jsonStr){updateData(JSON.parse(jsonStr))});
     }
 
     function updateData(data) {
         transactionListViewModel.clear();
         if (data.length > 0)
-            accountName.text = data[0].customer_name;
+            accountName.text = data[0].supplier_name;
         for (var cnt = 0; cnt < data.length; ++cnt) {
-            var sale = data[cnt];
-
-            var saleTypeStr="Alım";
-            if (sale.sale_type === "4")
-                saleTypeStr = "İade";
-
-            var amountDue = parseFloat(sale.amount_due.replace(/[₺|.]/g, '').replace(',', '.'));
-
-            var payments = sale.payment_type.split(',');
-
-            var remainAmount = 0.0;
-            var paymentAmount = 0.0;
-
-            if (amountDue === 0.0) {
-                saleTypeStr = "Ödeme";
-                paymentAmount = -parseFloat(payments[0].split(' ')[1]);
-            }
-            else {
-                for (var cnt1 =0; cnt1 < payments.length; ++ cnt1)
-                    if (payments[cnt1].startsWith("Due")) {
-                        remainAmount = parseFloat(payments[cnt1].split(' ')[1]);
-                        break;
-                    }
-            }
-
-            transactionListViewModel.append({id: sale["sale_id"], date: sale.sale_time, type: saleTypeStr, cost: amountDue.toFixed(2)+ "₺", payment: (saleTypeStr === "Ödeme" ? paymentAmount:(amountDue-remainAmount)).toFixed(2) + "₺", remain: remainAmount.toFixed(2)+ "₺"});
+            var receiving = data[cnt];
+            var total = parseFloat(receiving.total.replace(/[₺|.]/g, '').replace(',', '.'));
+            transactionListViewModel.append({id: receiving.receiving_id, date: receiving.receiving_time, type: (total < 0 ? "İade": "Alım"), cost: total.toFixed(2)+ "₺", payment: receiving.payment_type});
         }
     }
 
@@ -190,7 +166,7 @@ Page {
         height: 50
         Text {
             id: accountNum
-            text: supplier_id
+            text: person_id
             color: "slategray"
             font.pixelSize: 14
             font.family: Fonts.fontRubikRegular.name
@@ -215,8 +191,8 @@ Page {
 
     FocusScope {
         id: transactionList
-        y: 58
         width: parent.width
+        anchors.topMargin: 4
         anchors.top: accountTitle.bottom
         anchors.bottom: parent.bottom
         activeFocusOnTab: true
@@ -260,7 +236,7 @@ Page {
                             font.pixelSize: 16
                             font.family: Fonts.fontRubikRegular.name
                             anchors.left: parent.left
-                            width: parent.width/3
+                            width: parent.width/2.5
                             horizontalAlignment: Text.AlignHCenter
                             verticalAlignment: Text.AlignVCenter
                             anchors.top: parent.top
@@ -276,8 +252,26 @@ Page {
                             color: type == "Alım" ? "#545454": "crimson"
                             font.pixelSize: 18
                             font.family: Fonts.fontRubikRegular.name
-                            width: parent.width/6
+                            width: parent.width/5
                             anchors.left: transactionTime.right
+                            anchors.top: parent.top
+                            anchors.bottom: parent.bottom
+                            horizontalAlignment: Text.AlignLeft
+                            verticalAlignment: Text.AlignVCenter
+                        }
+                        ListViewColumnLabel{
+                            text: "Ödeme Şekli"
+                            labelOf: transactionPayment
+                        }
+                        Text {
+                            id: transactionPayment
+                            anchors.rightMargin: 4
+                            anchors.left : transactionType.right
+                            text: payment
+                            color: type == "Alım" ? "#545454": "crimson"
+                            font.pixelSize: 18
+                            font.family: Fonts.fontRubikRegular.name
+                            width: parent.width/5
                             anchors.top: parent.top
                             anchors.bottom: parent.bottom
                             horizontalAlignment: Text.AlignLeft
@@ -290,50 +284,12 @@ Page {
                         Text {
                             id: transactionCost
                             anchors.rightMargin: 4
-                            anchors.right : transactionPayment.left
-                            text: cost
-                            visible: type != "Ödeme"
-                            color: type == "Alım" ? "#545454": "crimson"
-                            font.pixelSize: 20
-                            font.family: Fonts.fontIBMPlexMonoRegular.name
-                            width: parent.width/6
-                            anchors.top: parent.top
-                            anchors.bottom: parent.bottom
-                            horizontalAlignment: Text.AlignRight
-                            verticalAlignment: Text.AlignVCenter
-                        }
-                        ListViewColumnLabel{
-                            text: "Ödenen"
-                            labelOf: transactionPayment
-                        }
-                        Text {
-                            id: transactionPayment
-                            anchors.rightMargin: 4
-                            anchors.right : transactionRemain.left
-                            text: payment
-                            color: type == "Alım" ? "#545454": "crimson"
-                            font.pixelSize: 20
-                            font.family: Fonts.fontIBMPlexMonoRegular.name
-                            width: parent.width/6
-                            anchors.top: parent.top
-                            anchors.bottom: parent.bottom
-                            horizontalAlignment: Text.AlignRight
-                            verticalAlignment: Text.AlignVCenter
-                        }
-                        ListViewColumnLabel{
-                            text: "Kalan"
-                            labelOf: transactionRemain
-                        }
-                        Text {
-                            id: transactionRemain
-                            anchors.rightMargin: 4
                             anchors.right : parent.right
-                            text: remain
-                            visible: type != "Ödeme"
+                            text: cost
                             color: type == "Alım" ? "#545454": "crimson"
-                            font.pixelSize: 24
+                            font.pixelSize: 20
                             font.family: Fonts.fontIBMPlexMonoRegular.name
-                            width: parent.width/6
+                            width: parent.width/5
                             anchors.top: parent.top
                             anchors.bottom: parent.bottom
                             horizontalAlignment: Text.AlignRight
@@ -365,8 +321,7 @@ Page {
                             clickBasicSound.play();
                         }
 
-                        if ("Ödeme" !== transactionListViewModel.get(transactionListView.currentIndex).type)
-                            receiptPopup.getReceipt("receivings", transactionListViewModel.get(transactionListView.currentIndex).id);
+                        receiptPopup.getReceipt("receivings", transactionListViewModel.get(transactionListView.currentIndex).id);
                     }
                 }
 
@@ -375,9 +330,8 @@ Page {
                     PropertyChanges { target: content; color:"#CCD1D9"; height: 50; width: container.width - 15; anchors.leftMargin: 10; anchors.rightMargin: 15 }
                     PropertyChanges { target: transactionTime; font.pixelSize: 20; }
                     PropertyChanges { target: transactionType; font.pixelSize: 24; }
-                    PropertyChanges { target: transactionCost; font.pixelSize: 24; }
                     PropertyChanges { target: transactionPayment; font.pixelSize: 24; }
-                    PropertyChanges { target: transactionRemain; font.pixelSize: 24; font.family: Fonts.fontIBMPlexMonoSemiBold.name }
+                    PropertyChanges { target: transactionCost; font.pixelSize: 24; font.family: Fonts.fontIBMPlexMonoSemiBold.name  }
                 }
             }
             ScrollBar.vertical: ScrollBar {

@@ -31,22 +31,25 @@ Popup{
     function getReceipt(transactionTypeDir, receiptId) {
         receiptRequest.get(transactionTypeDir + "/receipt/" + receiptId + "/json", function(code, jsonStr) {
             var data = JSON.parse(jsonStr);
+            transactionTime.text = data.transaction_time;
+            console.log(transactionTime.text);
             companyName.text = data.company_name;
             companyAddress.text = data.company_address;
             companyPhone.text = data.company_phone;
-            modeLabel.text = data.mode_label;
-            transactionTime.text = data.transaction_time;
+            returnPolicy.text = data.return_policy;
+            employeeName.text = "Kasiyer: " + data.employee;
             barcode.source = "data:image/png;base64," + data.barcode;
             if (transactionTypeDir === "sales") {
                 customerOrSupplierName.text = "Müşteri: " + data.customer;
                 transactionId.text = data.sale_id;
+                modeLabel.text = data.mode_label;
             }
             else {
                 customerOrSupplierName.text = "Satıcı: " + data.supplier;
                 transactionId.text = data.receiving_id;
+                modeLabel.text = data.mode;
             }
-            employeeName.text = "Kasiyer: " + data.employee;
-            returnPolicy.text = data.return_policy;
+            console.log(employeeName.text);
             cartListViewModel.clear();
             var keys = Object.keys(data.cart);
             for (var cnt = 0; cnt < keys.length; ++cnt) {
@@ -56,7 +59,7 @@ Popup{
             cart.height = 40 * keys.length;
             paymentListViewModel.clear();
             paymentListViewModel.append({type: "Toplam", amount: parseFloat(data.total).toFixed(2) + "₺"});
-
+            console.log("allllo");
             if (transactionTypeDir === "sales") {
                 var payment_keys = Object.keys(data.payments);
                 for (cnt=0; cnt < payment_keys.length; cnt++) {

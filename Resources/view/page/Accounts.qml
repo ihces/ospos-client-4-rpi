@@ -341,9 +341,9 @@ Page {
                     onDoubleClicked: {
                         if (peopleListView.currentIndex !== index)
                             peopleListView.currentIndex = index;
-                        accountsPage.parent.push('Account.qml',
+                        accountsPage.parent.push(isAccountTypeCustomer()?'Account.qml': 'SupplierAccount.qml',
                                                  {
-                                                     cust_id:  peopleListViewModel.get(index).id,
+                                                     person_id:  peopleListViewModel.get(index).id,
                                                      phone: peopleListViewModel.get(index).phone,
                                                      address:  peopleListViewModel.get(index).address
                                                  })

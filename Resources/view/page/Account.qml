@@ -13,7 +13,7 @@ Page {
 
     title: qsTr("Alacak Hesabı")
 
-    property int cust_id
+    property int person_id
     property string phone
     property string address
     property int busyIndicatorCnt: 0
@@ -44,7 +44,7 @@ Page {
     }
 
     function updateTotalDue() {
-        accountRequest.get("customers/get_total_due/" +cust_id,
+        accountRequest.get("customers/get_total_due/" +person_id,
                            function(code, jsonStr) {
                                var data = JSON.parse(jsonStr);
                                totalCost.text = parseFloat(data).toFixed(2) + "₺";
@@ -62,7 +62,7 @@ Page {
                                                    },
                                                    function(code, jsonStr) {
                                                        accountRequest.post("sales/select_customer/json",
-                                                                           {customer: cust_id},
+                                                                           {customer: person_id},
                                                                            function(code, jsonStr) {
                                                                                accountRequest.post("sales/add/json", {item: "0000000000000"}, function(code, jsonStr){
                                                                                    accountRequest.post("sales/add_payment/json",
@@ -129,7 +129,7 @@ Page {
         }
         var searchObj = {start_date: startDateStr, end_date: endDateStr};
 
-        accountRequest.get("sales/get_transactions/" + cust_id, searchObj, function(code, jsonStr){updateData(JSON.parse(jsonStr))});
+        accountRequest.get("sales/get_transactions/" + person_id, searchObj, function(code, jsonStr){updateData(JSON.parse(jsonStr))});
     }
 
     function updateData(data) {
@@ -333,7 +333,7 @@ Page {
         height: 50
         Text {
             id: accountNum
-            text: cust_id
+            text: person_id
             color: "slategray"
             font.pixelSize: 14
             font.family: Fonts.fontRubikRegular.name
