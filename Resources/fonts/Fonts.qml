@@ -19,6 +19,14 @@ Item {
         source: "./product/Product-Sans-Regular.otf"
     }
 
+    readonly property FontLoader fontProductItalic: FontLoader {
+        source: "./product/Product-Sans-Bold-Italic.otf"
+    }
+
+    readonly property FontLoader fontNunitoItalic: FontLoader {
+        source: "./product/Nunito-BoldItalic.ttf"
+    }
+
     readonly property FontLoader fontRubikRegular: FontLoader {
         source: "./product/Rubik-Regular.ttf"
     }
@@ -60,6 +68,10 @@ Item {
 
     readonly property FontLoader fontTomorrowSemiBold: FontLoader {
         source: "./product/Tomorrow-SemiBold.ttf"
+    }
+
+    readonly property FontLoader fontOxaniumLight: FontLoader {
+        source: "./product/Oxanium-Light.ttf"
     }
 
     readonly property string icons: fonts.fontAwesomeRegular.name

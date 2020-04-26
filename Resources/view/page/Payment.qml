@@ -3,6 +3,7 @@ import QtQuick.Controls 2.0
 import QtQuick.Dialogs 1.2
 import posapp.restrequest 1.0
 import "../../fonts"
+import "../controls"
 
 Page {
     id: paymentPage
@@ -15,9 +16,20 @@ Page {
         id:pageLoadRequest
 
         onSessionTimeout: {
-            console.log("sale_timeout");
             paymentPage.parent.pop();
         }
+    }
+
+    ReceiptPopup {
+        id: receiptPopup
+        onVisibleChanged: {
+            if (!visible)
+                paymentPage.parent.pop();
+        }
+    }
+
+    ToastManager {
+        id: toast
     }
 
     Component.onCompleted: {
@@ -27,7 +39,7 @@ Page {
     function updateData(data) {
         paymentTextField.text = parseFloat(data["amount_due"]).toFixed(2);
         remainCost.text = paymentTextField.text + "₺";
-        custNameText.text = data.customer?data.customer:"Müşteri Seçilmedi";
+        custSelectButton.text = data.customer?data.customer:"Müşteri Seçilmedi";
         paymentListViewModel.clear();
 
         finishButton.enabled = false;
@@ -101,7 +113,7 @@ Page {
             TextField {
                 id: customerNameTextField
                 x: 400
-                font.pointSize: 20
+                font.pixelSize: 20
                 activeFocusOnTab: true
                 focus: true
                 anchors.right: parent.right
@@ -253,34 +265,28 @@ Page {
 
     ComboBox {
         id: typeButton
-        KeyNavigation.left: paymentTextField
-        KeyNavigation.down: paymentList
         anchors.left: parent.left
-        anchors.top: custNameAsTitle.bottom
+        anchors.top: custSelectButton.bottom
         anchors.topMargin: 4
         anchors.leftMargin: 4
-        model:["Nakit", "Banka Kartı", "Kredi Kartı"]
-        spacing: 5
-        height: 50
-        padding: 10
-        font.pixelSize: 28
-        font.family: Fonts.fontBarlowRegular.name
-        width: 150
-        background: Rectangle{
-            implicitHeight: parent.height
-            implicitWidth: parent.width
-            color: !parent.enabled?"gainsboro": (parent.activeFocus?"dodgerblue":"slategray")
-            radius: 0
+        placeholderText: "Ödeme Türü"
+        model:ListModel{
+            ListElement{name: "Nakit"}
+            ListElement{name: "Kredi Kartı"}
+            ListElement{name: "Veresiye"}
         }
+        height: 50
+        font.pixelSize: 24
+        width: 150
     }
 
     TextField {
         id: paymentTextField
-        font.pointSize: 20
+        font.pixelSize: 20
         activeFocusOnTab: true
         focus: true
         anchors.left: typeButton.right
-        anchors.top: custNameAsTitle.bottom
+        anchors.top: custSelectButton.bottom
         anchors.leftMargin: 4
         anchors.topMargin: 4
         topPadding: 8
@@ -312,12 +318,9 @@ Page {
             anchors.topMargin: 6
             anchors.rightMargin: 6
             text: "Ödeme Ekle"
-            spacing: 5
-            autoExclusive: false
             height: 38
             width: 100
-            font.family: Fonts.fontBarlowRegular.name
-            font.pointSize: 14
+            font.pixelSize: 14
             z:100
             Keys.onReturnPressed: {
                 clicked();
@@ -328,56 +331,31 @@ Page {
                                         updateData(JSON.parse(jsonStr));
                                      });
             }
-
-            background: Rectangle{
-                anchors.fill:parent
-                color: !enabled?"gainsboro":(parent.activeFocus?"darksalmon":"salmon")
-            }
+            borderColor:"salmon"
         }
     }
 
-    Rectangle{
-        id:custNameAsTitle
+    Button{
+        id:custSelectButton
         width: parent.width
         height: 25
-        color: "#d6e6f6"
-        Text{
-            id: custNameText
-            text: "Müşteri Seçilmedi"
-            anchors.centerIn: parent
-            font.pixelSize: 18
-            color: "slategray"
-            font.family: Fonts.fontTomorrowSemiBold.name
-        }
-        MouseArea {
-            anchors.fill: parent
-            onClicked: {
-                searchCustomer();
-                selectCustomerPopup.open();
-            }
+        font.pixelSize: 18
+        onClicked: {
+            searchCustomer();
+            selectCustomerPopup.open();
         }
     }
 
     Button {
         id: suspendButton
-        KeyNavigation.left: paymentTextField
-        KeyNavigation.down: paymentList
         anchors.right: parent.right
-        anchors.top: custNameAsTitle.bottom
+        anchors.top: custSelectButton.bottom
         anchors.topMargin: 4
         anchors.rightMargin: 4
         text: "Beklet"
-        spacing: 5
-        autoExclusive: false
         height: 50
         width: 150
-        padding: 10
-        font.pixelSize: 28
-        font.family: Fonts.fontBarlowRegular.name
-        background: Rectangle{
-            anchors.fill:parent
-            color: parent.activeFocus?"dodgerblue":"slategray"
-        }
+        font.pixelSize: 24
         onClicked: {
             pageLoadRequest.post("sales/suspend/json",{},
                                  function(code, jsonStr){
@@ -402,7 +380,7 @@ Page {
         Rectangle {
             width: parent.width
             anchors.top: parent.top
-            height: 2
+            height: 1
             color: paymentListView.activeFocus?"dodgerblue":"slategray"
         }
 
@@ -411,10 +389,6 @@ Page {
             width: parent.width;
             height: parent.height
             focus: true
-            /*Keys.onLeftPressed: {
-              drawer.open()
-            }*/
-            KeyNavigation.down: finishButton
             model: ListModel{
                 id: paymentListViewModel
             }
@@ -448,13 +422,8 @@ Page {
                             anchors.leftMargin: 40
                             visible: false
                             text: "Sil"
-                            spacing: 5
-                            autoExclusive: false
                             height: label1.height
-                            padding: 10
-                            checkable: true
-                            font.family: Fonts.fontBarlowRegular.name
-                            font.pointSize: 14
+                            font.pixelSize: 14
                             z:100
                             MouseArea{
                                 anchors.fill: parent
@@ -467,10 +436,7 @@ Page {
                                 }
                             }
 
-                            background: Rectangle{
-                                anchors.fill:parent
-                                color: parent.checked?"crimson":"indianred"
-                            }
+                            borderColor:"indianred"
                         }
 
                         Text {
@@ -514,9 +480,9 @@ Page {
 
                 states: State {
                     name: "active"; when: paymentContainer.activeFocus
-                    PropertyChanges { target: paymentContent; color: "dodgerblue"; width: paymentContainer.width - 10; height:42; anchors.leftMargin: 10; anchors.rightMargin: 10;}
-                    PropertyChanges { target: label1; font.pixelSize: 24; font.bold: true; color: "white" }
-                    PropertyChanges { target: label3; font.pixelSize: 28; color: "white"; font.family: Fonts.fontIBMPlexMonoSemiBold.name}
+                    PropertyChanges { target: paymentContent; color: "#CCD1D9"; width: paymentContainer.width - 15; height:42; anchors.leftMargin: 10; anchors.rightMargin: 15;}
+                    PropertyChanges { target: label1; font.pixelSize: 24; }
+                    PropertyChanges { target: label3; font.pixelSize: 24; font.family: Fonts.fontIBMPlexMonoSemiBold.name}
                     PropertyChanges { target: deleteButton; visible:true }
                 }
 
@@ -537,7 +503,7 @@ Page {
         Rectangle {
             width: parent.width
             anchors.bottom: parent.bottom
-            height: 2
+            height: 1
             color: paymentListView.activeFocus?"dodgerblue":"slategray"
         }
     }
@@ -546,28 +512,29 @@ Page {
         anchors.bottom: parent.bottom
         anchors.left: cancelButton.right
         width: parent.width - 316
+        anchors.margins: 4
         height: 50
 
         Label {
             id: itemNum
             text: "Kalan Tutar:"
-            anchors.topMargin: -6
+            anchors.topMargin: 3
             width: parent.width
             anchors.top: parent.top
             horizontalAlignment: "AlignHCenter"
             font.family: "Arial"
-            font.pointSize: 10
+            font.pixelSize: 12
             color: "steelblue"
         }
         Label {
             id: remainCost
             anchors.top: itemNum.bottom
-            anchors.topMargin: -12
+            anchors.topMargin: -9
             horizontalAlignment: "AlignHCenter"
             width: parent.width
             text: "0,00₺"
             font.family: Fonts.fontIBMPlexMonoRegular.name
-            font.pointSize: 32
+            font.pixelSize: 32
             font.bold: true
             color: "steelblue"
         }
@@ -580,13 +547,9 @@ Page {
         anchors.bottomMargin: 4
         anchors.leftMargin: 4
         text: "İptal Et"
-        spacing: 5
-        autoExclusive: false
         height: 50
         width: 150
-        padding: 10
-        font.family: Fonts.fontBarlowRegular.name
-        font.pointSize: 24
+        font.pixelSize: 24
         Keys.onReturnPressed: {
             pageLoadRequest.post("sales/cancel/json",{},
                                  function(code, jsonStr) {
@@ -595,12 +558,7 @@ Page {
                                      paymentPage.parent.pop();
                                  });
         }
-
-
-        background: Rectangle{
-            anchors.fill:parent
-            color: parent.activeFocus?"crimson":"indianred"
-        }
+        borderColor:"indianred"
     }
 
     Button {
@@ -610,25 +568,27 @@ Page {
         anchors.bottomMargin: 4
         anchors.rightMargin: 4
         text: "Tamamla"
-        spacing: 5
-        autoExclusive: false
         height: 50
         width: 150
-        padding: 10
-        font.family: Fonts.fontBarlowRegular.name
-        font.pointSize: 24
+        font.pixelSize: 24
         Keys.onReturnPressed: {
-            pageLoadRequest.post("sales/complete/json",{},
-                                 function(code, jsonStr) {
-                                    updateData(JSON.parse(jsonStr));
-                                     paymentPage.parent.pop();
-                                 });
+            clicked();
         }
 
-        background: Rectangle{
-            anchors.fill:parent
-            color: !finishButton.enabled?"gainsboro": (parent.activeFocus?"seagreen":"mediumseagreen")
+        onClicked: {
+            pageLoadRequest.post("sales/complete/json",
+                                 function(code, jsonStr) {
+                                     var data = JSON.parse(jsonStr);
+                                     if (data.sale_id_num > 0){
+                                         receiptPopup.getReceipt("sales", data.sale_id_num);
+                                         toast.showSuccess("İşlem Tamamlandı!", 3000);
+                                     }
+                                     else {
+                                        toast.showError("İşlem tamamlanırken bir sorun meydana geldi!", 3000);
+                                     }
+                                 });
         }
+        borderColor:"mediumseagreen"
     }
 
 }

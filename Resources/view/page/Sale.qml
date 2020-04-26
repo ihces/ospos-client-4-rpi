@@ -3,6 +3,7 @@ import QtQuick.Controls 2.0
 import posapp.restrequest 1.0
 
 import "../../fonts"
+import "../controls"
 
 Page {
     id: salePage
@@ -31,7 +32,7 @@ Page {
         totalCost.text = parseFloat(data["total"]).toFixed(2) + "₺";
         modeSelectComboBox.currentIndex = (data.mode === "sale" ? 0:1);
 
-        custNameText.text = data.customer?data.customer:"Müşteri Seçilmedi";
+        custSelectButton.text = data.customer?data.customer:"Müşteri Seçilmedi";
 
         stockSelectComboBoxModel.clear();
         var location_keys = Object.keys(data.stock_locations);
@@ -114,7 +115,7 @@ Page {
             TextField {
                 id: customerNameTextField
                 x: 400
-                font.pointSize: 20
+                font.pixelSize: 20
                 activeFocusOnTab: true
                 focus: true
                 anchors.right: parent.right
@@ -408,53 +409,32 @@ Page {
         }
     }
 
-    Rectangle{
-        id:custNameAsTitle
+    Button{
+        id:custSelectButton
         width: parent.width
         height: 25
-        color: "#d6e6f6"
-        Text{
-            id: custNameText
-            anchors.centerIn: parent
-            font.pixelSize: 18
-            color: "slategray"
-            font.family: Fonts.fontTomorrowSemiBold.name
-        }
-        MouseArea {
-            anchors.fill: parent
-            onClicked: {
-                searchCustomer();
-                selectCustomerPopup.open();
-            }
+        font.pixelSize: 18
+        onClicked: {
+            searchCustomer();
+            selectCustomerPopup.open();
         }
     }
     ComboBox {
         id: modeSelectComboBox
-        KeyNavigation.left: barcodeTextField
-        KeyNavigation.down: cartList
         anchors.left: parent.left
-        anchors.top: custNameAsTitle.bottom
+        anchors.top: custSelectButton.bottom
         anchors.topMargin: 4
         anchors.leftMargin: 4
+        placeholderText: "İşlem Türü"
         model:ListModel{
             id:modeSelectComboBoxModel
             ListElement{name: "Satış"; mode: "sale"}
             ListElement{name: "İade"; mode: "return"}
         }
-        textRole: "name"
         enabled: false
-        spacing: 5
         height: 50
-        padding: 10
-        font.pixelSize: 28
-        font.family: Fonts.fontBarlowRegular.name
+        font.pixelSize: 24
         width: 150
-        background: Rectangle{
-            implicitHeight: parent.height
-            implicitWidth: parent.width
-            color: parent.activeFocus?"dodgerblue":"slategray"
-            radius: 0
-        }
 
         onCurrentIndexChanged: {
             if (modeSelectComboBox.enabled && stockSelectComboBox.enabled)
@@ -471,26 +451,15 @@ Page {
 
     TextField {
         id: barcodeTextField
-        font.pointSize: 20
-        activeFocusOnTab: true
-        focus: true
+        font.pixelSize: 20
         anchors.left: modeSelectComboBox.right
-        anchors.top: custNameAsTitle.bottom
+        anchors.top: custSelectButton.bottom
         anchors.topMargin: 4
         anchors.leftMargin: 4
-        topPadding: 8
         width: parent.width - 316
         height: 50
         font.family: Fonts.fontOrbitronRegular.name
-        verticalAlignment: "AlignVCenter"
         placeholderText: "Ürün Adı veya Barkod"
-        KeyNavigation.down: cartList
-        background: Rectangle {
-            border.color: parent.activeFocus?"dodgerblue":"slategray"
-            border.width: 2
-            color: parent.activeFocus ?"dodgerblue": "white"
-        }
-        color: activeFocus ? "white": "slategray"
         leftPadding: 10
         property bool barcodeTextCleared: false
         onTextChanged: {
@@ -511,23 +480,16 @@ Page {
             anchors.topMargin: 6
             anchors.rightMargin: 6
             text: "Favoriler"
-            spacing: 5
-            autoExclusive: false
             height: 38
             width: 100
-            font.family: Fonts.fontBarlowRegular.name
-            font.pointSize: 14
+            font.pixelSize: 14
             z:100
             Keys.onReturnPressed: {
                 clicked();
             }
             onClicked: {
             }
-
-            background: Rectangle{
-                anchors.fill:parent
-                color: parent.activeFocus?"deeppink":"hotpink"
-            }
+            borderColor: "hotpink"
         }
     }
 
@@ -574,7 +536,7 @@ Page {
                         color:"transparent"
 
                         Text {
-                            id: label444
+                            id: itemNameText
                             text: name
                             color: "#545454"
                             font.pixelSize: 18
@@ -586,34 +548,33 @@ Page {
                         }
 
                         Text {
-                            id: label445
+                            id: itemCodeText
                             text: code
                             color: "white"
                             font.pixelSize: 16
                             font.family: Fonts.fontPlayRegular.name
                             visible: false
                             anchors.leftMargin: 20
-                            anchors.top: label444.bottom
+                            anchors.top: itemNameText.bottom
                             anchors.topMargin: 7
                         }
 
                         Text {
-                            id: label446
+                            id: itemStockText
                             text: stock
                             color: "white"
                             font.pixelSize: 16
                             font.family: Fonts.fontRubikRegular.name
                             font.italic: true
                             visible: false
-                            anchors.top: label444.bottom
-                            anchors.left: label445.right
+                            anchors.top: itemNameText.bottom
+                            anchors.left: itemCodeText.right
                             anchors.topMargin: 7
                         }
                     }
                 }
 
                 MouseArea {
-                    id: mouseArea1
                     anchors.fill: parent
                     hoverEnabled: true
 
@@ -632,7 +593,7 @@ Page {
 
                     Keys.onPressed: {
                         if (event.key === Qt.Key_Enter || event.key === Qt.Key_Return) {
-                            //itemList.visible = true
+                            clicked();
                         }
                     }
                 }
@@ -642,9 +603,9 @@ Page {
 
                     PropertyChanges { target: container2; height: 75}
                     PropertyChanges { target: content989; color: "dodgerblue"; height: 75;}
-                    PropertyChanges { target: label444; font.pixelSize: 22; font.bold: true; color: "white" }
-                    PropertyChanges { target: label445; visible:true}
-                    PropertyChanges { target: label446; visible:true}
+                    PropertyChanges { target: itemNameText; font.pixelSize: 22; font.bold: true; color: "white" }
+                    PropertyChanges { target: itemCodeText; visible:true}
+                    PropertyChanges { target: itemStockText; visible:true}
                 }
             }
             ScrollBar.vertical: ScrollBar {
@@ -659,28 +620,16 @@ Page {
 
     ComboBox {
         id: stockSelectComboBox
-        KeyNavigation.left: barcodeTextField
-        KeyNavigation.down: cartList
         anchors.right: parent.right
-        anchors.top: custNameAsTitle.bottom
+        anchors.top: custSelectButton.bottom
         anchors.topMargin: 4
         anchors.rightMargin: 4
         model:ListModel{id: stockSelectComboBoxModel}
-        spacing: 5
         enabled: false
         height: 50
-        padding: 10
-        font.pixelSize: 28
-        font.family: Fonts.fontBarlowRegular.name
+        font.pixelSize: 24
         width: 150
-        textRole: "name"
-        background: Rectangle{
-            implicitHeight: parent.height
-            implicitWidth: parent.width
-            color: parent.activeFocus?"dodgerblue":"slategray"
-            radius: 0
-        }
-
+        placeholderText: "Stok"
         onCurrentIndexChanged: {
             if (stockSelectComboBox.enabled && modeSelectComboBox.enabled)
                 salesRequest.post("sales/change_mode/json",
@@ -708,7 +657,7 @@ Page {
         Rectangle {
             width: parent.width
             anchors.top: parent.top
-            height: 2
+            height: 1
             color: cartListView.activeFocus?"dodgerblue":"slategray"
         }
 
@@ -716,7 +665,6 @@ Page {
             id: cartListView
             width: parent.width; height: parent.height
             focus: true
-            KeyNavigation.down: paymentButton
             model: ListModel{id: cartListViewModel}
             cacheBuffer: 200
             delegate: Item {
@@ -742,14 +690,14 @@ Page {
                             font.pixelSize: 20
                             font.family: Fonts.fontRubikRegular.name
                             width: parent.width / 2 - 20
-                            anchors.left: label2.right
+                            anchors.left: amountSpinBox.right
                             anchors.leftMargin: 20
                             anchors.top: parent.top
                             anchors.topMargin: 7
                         }
 
                         Text {
-                            id: barcodLabel
+                            id: barcodeText
                             text: barcode
                             color: "white"
                             visible: false
@@ -761,20 +709,20 @@ Page {
                         }
 
                         Text {
-                            id: stockLabel
+                            id: stockText
                             text: stock
                             font.italic: true
                             color: "white"
                             visible: false
                             font.pixelSize: 20
                             font.family: Fonts.fontRubikRegular.name
-                            anchors.left: barcodLabel.right
+                            anchors.left: barcodeText.right
                             anchors.top: label.bottom
                             anchors.topMargin: 20
                         }
 
                         Text {
-                            id: amountLabel
+                            id: amountText
                             text: parseInt(amount)
                             color: "#545454"
                             font.pixelSize: 20
@@ -787,7 +735,7 @@ Page {
                         }
 
                         SpinBox {
-                            id: label2
+                            id: amountSpinBox
                             anchors.left: parent.left
                             anchors.leftMargin: 4
                             anchors.top: parent.top
@@ -799,7 +747,7 @@ Page {
                             stepSize: 1
                             font.pixelSize: 20
                             font.family: Fonts.fontRubikRegular.name
-                            width: amountLabel.width
+                            width: amountText.width
                             property bool initialized
                             onValueChanged: {
                                 if (!initialized)
@@ -817,7 +765,7 @@ Page {
                         }
 
                         Text {
-                            id: label3
+                            id: costText
                             horizontalAlignment: Text.AlignRight
                             anchors.rightMargin: 4
                             anchors.right : parent.right
@@ -832,25 +780,17 @@ Page {
 
                         Button {
                             id:deleteButton
-                            anchors.top: label2.bottom
-                            anchors.left: label2.left
+                            anchors.top: amountSpinBox.bottom
+                            anchors.left: amountSpinBox.left
                             anchors.topMargin: 7
                             visible: false
                             text: "Sil"
-                            spacing: 5
-                            autoExclusive: false
-                            height: label2.height
-                            width: label2.width
-                            padding: 10
-                            checkable: true
-                            font.family: Fonts.fontBarlowRegular.name
-                            font.pointSize: 14
+                            height: amountSpinBox.height
+                            width: amountSpinBox.width
+                            font.pixelSize: 14
                             z: 100
 
-                            background: Rectangle{
-                                anchors.fill:parent
-                                color: parent.checked?"crimson":"indianred"
-                            }
+                            borderColor:"indianred"
                             MouseArea{
                                 anchors.fill: parent
                                 onClicked: {
@@ -885,19 +825,18 @@ Page {
 
                 states: State {
                     name: "active"; when: container.activeFocus
-                    PropertyChanges { target: content; color: "dodgerblue"; height: 100; width: container.width - 10; anchors.leftMargin: 10; anchors.rightMargin: 10 }
+                    PropertyChanges { target: content; color: "#CCD1D9"; height: 100; width: container.width - 15; anchors.leftMargin: 10; anchors.rightMargin: 15 }
                     PropertyChanges {
                         target: container
                         height: 100
                     }
-                    PropertyChanges { target: label; font.pixelSize: 24; font.bold: true; color: "white" }
-                    //PropertyChanges { target: label2; font.pixelSize: 32; font.bold: true; color: "white" }
-                    PropertyChanges { target: label3; font.pixelSize: 28; color: "white"; font.family: Fonts.fontIBMPlexMonoSemiBold.name }
+                    PropertyChanges { target: label; font.pixelSize: 24; }
+                    PropertyChanges { target: costText; font.pixelSize: 24; font.family: Fonts.fontIBMPlexMonoSemiBold.name }
                     PropertyChanges { target: deleteButton; visible:true }
-                    PropertyChanges { target: amountLabel; visible:false }
-                    PropertyChanges { target: label2; visible:true }
-                    PropertyChanges { target: barcodLabel; visible:true }
-                    PropertyChanges { target: stockLabel; visible:true }
+                    PropertyChanges { target: amountText; visible:false }
+                    PropertyChanges { target: amountSpinBox; visible:true }
+                    PropertyChanges { target: barcodeText; visible:true }
+                    PropertyChanges { target: stockText; visible:true }
                 }
 
                 transitions: Transition {
@@ -917,7 +856,7 @@ Page {
         Rectangle {
             width: parent.width
             anchors.bottom: parent.bottom
-            height: 2
+            height: 1
             color: cartListView.activeFocus?"dodgerblue":"slategray"
         }
     }
@@ -925,6 +864,7 @@ Page {
     Rectangle {
         anchors.bottom: parent.bottom
         anchors.left: suspendedButton.right
+        anchors.margins: 4
         width: parent.width - 316
         height: 50
 
@@ -933,22 +873,21 @@ Page {
             text: "0 Ürün Toplam:"
             width: parent.width
             anchors.top: parent.top
-            anchors.topMargin: -6
+            anchors.topMargin: 3
             horizontalAlignment: "AlignHCenter"
             font.family: "Arial"
-            font.pointSize: 10
+            font.pixelSize: 12
             color: "steelblue"
         }
         Label {
             id: totalCost
             anchors.top: itemNum.bottom
-            anchors.topMargin: -12
+            anchors.topMargin: -9
             horizontalAlignment: "AlignHCenter"
             width: parent.width
             text: "0,00₺"
-            renderType: Text.NativeRendering
             font.family: Fonts.fontIBMPlexMonoRegular.name
-            font.pointSize: 32
+            font.pixelSize: 32
             font.bold: true
             color: "steelblue"
         }
@@ -960,17 +899,9 @@ Page {
         anchors.bottomMargin: 4
         anchors.leftMargin: 4
         text: "Bekleyenler"
-        spacing: 5
-        autoExclusive: false
         height: 50
         width: 150
-        padding: 10
-        font.family: Fonts.fontBarlowRegular.name
-        font.pointSize: 20
-        background: Rectangle{
-            anchors.fill:parent
-            color: parent.activeFocus?"dodgerblue":"slategray"
-        }
+        font.pixelSize: 24
         Keys.onReturnPressed: {
             clicked();
         }
@@ -1001,23 +932,15 @@ Page {
         anchors.bottomMargin: 4
         anchors.rightMargin: 4
         text: "Ödeme"
-        spacing: 5
-        autoExclusive: false
         height: 50
         width: 150
-        padding: 10
-        font.family: Fonts.fontBarlowRegular.name
-        font.pointSize: 24
+        font.pixelSize: 24
         Keys.onReturnPressed: {
             clicked();
         }
         onClicked: {
             salePage.parent.push('Payment.qml')
         }
-
-        background: Rectangle{
-            anchors.fill:parent
-            color: parent.activeFocus?"darksalmon":"salmon"
-        }
+        borderColor:"salmon"
     }
 }

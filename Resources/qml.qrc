@@ -52,5 +52,17 @@
         <file>view/images/bracket.png</file>
         <file>fonts/product/Tomorrow-SemiBold.ttf</file>
         <file>view/page/Item.qml</file>
+        <file>fonts/product/Oxanium-Light.ttf</file>
+        <file>view/controls/ComboBox.qml</file>
+        <file>view/controls/qmldir</file>
+        <file>view/controls/ComboBoxEditable.qml</file>
+        <file>view/controls/TextField.qml</file>
+        <file>view/controls/ToastManager.qml</file>
+        <file>view/controls/Toast.qml</file>
+        <file>fonts/product/Nunito-BoldItalic.ttf</file>
+        <file>view/controls/Button.qml</file>
+        <file>view/page/ReceiptPopup.qml</file>
+        <file>view/controls/ListViewColumnLabel.qml</file>
+        <file>view/page/SupplierAccount.qml</file>
     </qresource>
 </RCC>

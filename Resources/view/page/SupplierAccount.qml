@@ -11,9 +11,9 @@ Page {
     width:  800 //parent
     height:  440 //parent
 
-    title: qsTr("Alacak Hesabı")
+    title: qsTr("Satıcı Hesabı")
 
-    property int cust_id
+    property int supplier_id
     property string phone
     property string address
     property int busyIndicatorCnt: 0
@@ -41,53 +41,6 @@ Page {
 
     ReceiptPopup {
         id: receiptPopup
-    }
-
-    function updateTotalDue() {
-        accountRequest.get("customers/get_total_due/" +cust_id,
-                           function(code, jsonStr) {
-                               var data = JSON.parse(jsonStr);
-                               totalCost.text = parseFloat(data).toFixed(2) + "₺";
-                           });
-    }
-
-    function doPayment(paymentType, paymentAmount) {
-        accountRequest.get("sales/json",
-                           function(code, jsonStr) {
-                               var data = JSON.parse(jsonStr);
-                               accountRequest.post("sales/change_mode/json",
-                                                   {
-                                                       mode: "sale",
-                                                       stock_location: Object.keys(data.stock_locations)[0]
-                                                   },
-                                                   function(code, jsonStr) {
-                                                       accountRequest.post("sales/select_customer/json",
-                                                                           {customer: cust_id},
-                                                                           function(code, jsonStr) {
-                                                                               accountRequest.post("sales/add/json", {item: "0000000000000"}, function(code, jsonStr){
-                                                                                   accountRequest.post("sales/add_payment/json",
-                                                                                                   {
-                                                                                                       payment_type: paymentType,
-                                                                                                       amount_tendered: paymentAmount
-                                                                                                   },
-                                                                                                   function(code, jsonStr) {
-                                                                                                      accountRequest.post("sales/complete/json", {only_payment: true}, function(code, jsonStr) {
-                                                                                                          var data = JSON.parse(jsonStr);
-
-                                                                                                          if (parseInt(data.sale_status) === 0 ){
-                                                                                                              selectLastTransactionsByDate.currentIndex = 6;
-                                                                                                              updateTotalDue();
-                                                                                                              doPaymentPopup.visible = false;
-                                                                                                              toast.showSuccess("Ödeme başarıyla yapıldı.", 3000);
-                                                                                                          }
-                                                                                                          else
-                                                                                                              toast.showError("Ödeme yapılırken bir hata meydana geldi.", 3000);
-                                                                                                      });
-                                                                                                   });
-                                                                               });
-                                                                           });
-                                                   });
-                           });
     }
 
     function getTransactions() {
@@ -129,7 +82,7 @@ Page {
         }
         var searchObj = {start_date: startDateStr, end_date: endDateStr};
 
-        accountRequest.get("sales/get_transactions/" + cust_id, searchObj, function(code, jsonStr){updateData(JSON.parse(jsonStr))});
+        accountRequest.get("receivings/get_transactions/" + supplier_id, searchObj, function(code, jsonStr){updateData(JSON.parse(jsonStr))});
     }
 
     function updateData(data) {
@@ -139,7 +92,7 @@ Page {
         for (var cnt = 0; cnt < data.length; ++cnt) {
             var sale = data[cnt];
 
-            var saleTypeStr="Satış";
+            var saleTypeStr="Alım";
             if (sale.sale_type === "4")
                 saleTypeStr = "İade";
 
@@ -163,102 +116,6 @@ Page {
             }
 
             transactionListViewModel.append({id: sale["sale_id"], date: sale.sale_time, type: saleTypeStr, cost: amountDue.toFixed(2)+ "₺", payment: (saleTypeStr === "Ödeme" ? paymentAmount:(amountDue-remainAmount)).toFixed(2) + "₺", remain: remainAmount.toFixed(2)+ "₺"});
-        }
-    }
-
-    Popup{
-        id: doPaymentPopup
-        width: parent.width * 0.5
-        height: parent.height * 0.5
-        x: parent.width * 0.25
-        y: parent.height * 0.2
-        z: Infinity
-        modal: true
-        focus: true
-        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
-
-        onVisibleChanged: {
-            if (!visible) {
-                paymentAmountField.needValidate = false;
-                paymentAmountField.text = "";
-            }
-        }
-
-        Rectangle{
-            width: parent.width * 0.9
-            height: parent.height * 0.9
-            anchors.centerIn: parent
-            Text {
-                id: descriptionText
-                text: "Ödeme Yap"
-                color: "slategray"
-                font.pixelSize: 24
-                font.family: Fonts.fontRubikRegular.name
-                anchors.top: parent.top
-                width: parent.width
-                horizontalAlignment: "AlignHCenter"
-            }
-            RadioButton {
-                id: paymentTypeCash
-                anchors.left: parent.left
-                anchors.top: descriptionText.bottom
-                anchors.topMargin: 20
-                text: "Nakit"
-                checked: true
-                width: parent.width / 2
-            }
-            RadioButton {
-                id: paymentTypeCreditCard
-                anchors.right: parent.right
-                anchors.top: descriptionText.bottom
-                anchors.topMargin: 20
-                text: "Kredi Kartı"
-                width: parent.width / 2
-            }
-            TextField {
-                id: paymentAmountField
-                anchors.right: parent.right
-                anchors.top: paymentTypeCash.bottom
-                horizontalAlignment: "AlignHCenter"
-                anchors.topMargin: 5
-                width: parent.width
-                required: true
-                validator: RegExpValidator{
-                    regExp: /^\s*-?((\d{1,3}(\.(\d){3})*)|\d*)(,\d{1,2})?\s?(\u20BA)?\s*$/
-                }
-                placeholderText: "Ödeme Tutarı"
-            }
-
-            Button {
-                id:cancelButton
-                text: "İptal"
-                height: 40
-                width: 100
-                anchors.left: parent.left
-                anchors.bottom: parent.bottom
-                font.pixelSize: 20
-                onClicked:{
-                    doPaymentPopup.visible = false
-                }
-            }
-
-            Button {
-                id:updateButton
-                text: "Ödeme Yap"
-                height: 40
-                width: 100
-                anchors.right: parent.right
-                anchors.bottom: parent.bottom
-                font.pixelSize: 20
-                borderColor: "salmon"
-                onClicked:{
-                    paymentAmountField.needValidate = true;
-                    if (paymentAmountField.isInvalid())
-                        toast.showError("Ödeme tutarı giriniz!", 3000);
-                    else
-                        doPayment(paymentTypeCash.checked?"Cash": "Credit Card", paymentAmountField.text.replace('.', ''));
-                }
-            }
         }
     }
 
@@ -333,7 +190,7 @@ Page {
         height: 50
         Text {
             id: accountNum
-            text: cust_id
+            text: supplier_id
             color: "slategray"
             font.pixelSize: 14
             font.family: Fonts.fontRubikRegular.name
@@ -360,7 +217,8 @@ Page {
         id: transactionList
         y: 58
         width: parent.width
-        height: parent.height - 116
+        anchors.top: accountTitle.bottom
+        anchors.bottom: parent.bottom
         activeFocusOnTab: true
 
         clip: true
@@ -398,7 +256,7 @@ Page {
                         Text {
                             id: transactionTime
                             text: date
-                            color: type == "Satış" ? "#545454": "crimson"
+                            color: type == "Alım" ? "#545454": "crimson"
                             font.pixelSize: 16
                             font.family: Fonts.fontRubikRegular.name
                             anchors.left: parent.left
@@ -415,7 +273,7 @@ Page {
                         Text {
                             id: transactionType
                             text: type
-                            color: type == "Satış" ? "#545454": "crimson"
+                            color: type == "Alım" ? "#545454": "crimson"
                             font.pixelSize: 18
                             font.family: Fonts.fontRubikRegular.name
                             width: parent.width/6
@@ -435,7 +293,7 @@ Page {
                             anchors.right : transactionPayment.left
                             text: cost
                             visible: type != "Ödeme"
-                            color: type == "Satış" ? "#545454": "crimson"
+                            color: type == "Alım" ? "#545454": "crimson"
                             font.pixelSize: 20
                             font.family: Fonts.fontIBMPlexMonoRegular.name
                             width: parent.width/6
@@ -453,7 +311,7 @@ Page {
                             anchors.rightMargin: 4
                             anchors.right : transactionRemain.left
                             text: payment
-                            color: type == "Satış" ? "#545454": "crimson"
+                            color: type == "Alım" ? "#545454": "crimson"
                             font.pixelSize: 20
                             font.family: Fonts.fontIBMPlexMonoRegular.name
                             width: parent.width/6
@@ -472,7 +330,7 @@ Page {
                             anchors.right : parent.right
                             text: remain
                             visible: type != "Ödeme"
-                            color: type == "Satış" ? "#545454": "crimson"
+                            color: type == "Alım" ? "#545454": "crimson"
                             font.pixelSize: 24
                             font.family: Fonts.fontIBMPlexMonoRegular.name
                             width: parent.width/6
@@ -508,7 +366,7 @@ Page {
                         }
 
                         if ("Ödeme" !== transactionListViewModel.get(transactionListView.currentIndex).type)
-                            receiptPopup.getReceipt("sales", transactionListViewModel.get(transactionListView.currentIndex).id);
+                            receiptPopup.getReceipt("receivings", transactionListViewModel.get(transactionListView.currentIndex).id);
                     }
                 }
 
@@ -521,11 +379,6 @@ Page {
                     PropertyChanges { target: transactionPayment; font.pixelSize: 24; }
                     PropertyChanges { target: transactionRemain; font.pixelSize: 24; font.family: Fonts.fontIBMPlexMonoSemiBold.name }
                 }
-
-                transitions: Transition {
-                    //NumberAnimation { properties: "height"; duration: 100 }
-                    //NumberAnimation { properties: "width"; duration: 100 }
-                }
             }
             ScrollBar.vertical: ScrollBar {
                 policy: ScrollBar.AlwaysOn
@@ -534,77 +387,6 @@ Page {
             Behavior on y {
                 NumberAnimation { duration: 600; easing.type: Easing.OutQuint }
             }
-        }
-
-        Rectangle {
-            width: parent.width
-            anchors.bottom: parent.bottom
-            height: 1
-            color: transactionListView.activeFocus?"dodgerblue":"slategray"
-        }
-    }
-
-    Rectangle {
-        anchors.bottom: parent.bottom
-        anchors.left: printButton.right
-        anchors.margins: 4
-        width: parent.width - 316
-        height: 50
-
-        Label {
-            id: itemNum
-            text: "Kalan Tutar:"
-            width: parent.width
-            anchors.top: parent.top
-            anchors.topMargin: 3
-            horizontalAlignment: "AlignHCenter"
-            font.family: "Arial"
-            font.pixelSize: 12
-            color: "indianred"
-        }
-        Label {
-            id: totalCost
-            anchors.top: itemNum.bottom
-            anchors.topMargin: -9
-            horizontalAlignment: "AlignHCenter"
-            width: parent.width
-            text: "0,00₺"
-            font.family: Fonts.fontIBMPlexMonoRegular.name
-            font.pixelSize: 32
-            font.bold: true
-            color: "crimson"
-        }
-    }
-    Button {
-        id:printButton
-        anchors.left: parent.left
-        anchors.bottom: parent.bottom
-        anchors.bottomMargin: 4
-        anchors.leftMargin: 4
-        text: "Özet Yazdır"
-        height: 50
-        width: 150
-        font.pixelSize: 24
-    }
-
-    Button {
-        id:paymentButton
-        anchors.right: parent.right
-        anchors.bottom: parent.bottom
-        anchors.bottomMargin: 4
-        anchors.rightMargin: 4
-        text: "Ödeme Yap"
-        height: 50
-        width: 150
-        font.pixelSize: 24
-        borderColor: "salmon"
-        Keys.onPressed: {
-            if (event.key === Qt.Key_Enter || event.key === Qt.Key_Return) {
-                clicked();
-            }
-        }
-        onClicked: {
-            doPaymentPopup.visible = true;
         }
     }
 }

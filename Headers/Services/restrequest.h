@@ -5,6 +5,8 @@
 #include <QNetworkReply>
 #include <QObject>
 #include <QString>
+#include <QLinkedList>
+#include <QMutex>
 
 class RestRequest : public QObject
 {
@@ -20,6 +22,8 @@ public slots:
 
 signals:
     void loginCompleted(bool succeed, QString error=nullptr);
+    void start();
+    void end();
     void sessionTimeout();
 
 public:
@@ -28,16 +32,17 @@ public:
     ~RestRequest();
 
 private slots:
-    void loginFinished();
+    void error(QNetworkReply::NetworkError code);
 
 private:
-    void updateCookies();
+    void updateCookies(QNetworkReply *reply);
+    void clearFinishedReplies();
 
 private:
     const QByteArray csrf_ospos_v3 = "f422fcc283ce95334506eb40fa3628d8";
-    QNetworkReply *reply;
-    QNetworkAccessManager *nam;
+    QLinkedList<QNetworkReply*> replyList;
     static QMap<QString, QNetworkCookie> cookies;
+    static QMutex cookieMutex;
     static bool m_sessionTimeout;
 };
 #endif // REST_REQUEST_H

@@ -4,15 +4,14 @@ import QtMultimedia 5.9
 import posapp.restrequest 1.0
 
 import "../../fonts"
+import "../controls"
 
 Page {
     id: itemPage
     width:  800 //parent
     height:  440 //parent
     property int item_id
-    property var item_transactions
-    property var itemQuantities
-    property var employees
+    property int busyIndicatorCnt: 0
 
     title: qsTr("Ürün Detayı")
 
@@ -22,44 +21,100 @@ Page {
         onSessionTimeout: {
             salePage.parent.pop();
         }
+
+        onStart: {busyIndicatorCnt++; busyIndicator.running = true}
+        onEnd: {if (--busyIndicatorCnt == 0)busyIndicator.running = false}
     }
 
     Component.onCompleted: {
-        itemRequest.get("items/count_details/" + itemPage.item_id + "/json", function(code, jsonStr){updateData(JSON.parse(jsonStr))});
+        selectLastTransactionsByDate.currentIndex = 6
+    }
+
+    ToastManager {
+        id: toast
+    }
+
+    function getTransactions() {
+        var stockQuery = "";
+        if (selectStock.currentIndex >= 0)
+            stockQuery = "/" + stockSelectComboBoxModel.get(selectStock.currentIndex).stock_id;
+        var startDateStr;
+        var nowDate = new Date();
+        nowDate.setTime( nowDate.getTime() - nowDate.getTimezoneOffset()*60*1000 );
+        var endDateStr = new Date(nowDate).toISOString();
+
+        var startDate = new Date(nowDate);
+        switch(selectLastTransactionsByDate.currentIndex) {
+        case 0:
+            startDate.setDate(startDate.getDate()-1);
+            startDateStr = startDate.toISOString();
+            break;
+        case 1:
+            startDate.setDate(startDate.getDate()-3);
+            startDateStr = startDate.toISOString();
+            break;
+        case 2:
+            startDate.setDate(startDate.getDate()-7);
+            startDateStr = startDate.toISOString();
+            break;
+        case 3:
+            startDate.setMonth(startDate.getMonth()-1);
+            startDateStr = startDate.toISOString();
+            break;
+        case 4:
+            startDate.setMonth(startDate.getMonth()-6);
+            startDateStr = startDate.toISOString();
+            break;
+        case 5:
+            startDate.setFullYear(startDate.getFullYear()-1);
+            startDateStr = startDate.toISOString();
+            break;
+        default:
+            startDateStr = new Date(2010, 1, 1).toISOString();
+            break;
+        }
+
+        itemRequest.get("items/count_details/" + itemPage.item_id + "/json" + stockQuery,
+                        {start_date: startDateStr, end_date: endDateStr},
+                        function(code, jsonStr){updateData(JSON.parse(jsonStr))});
     }
 
     function updateData(data) {
         barcodeText.text = data.item_info.item_number;
         itemNameText.text = data.item_info.name;
-
-        itemPage.item_transactions = data.inventory;
-        itemPage.employees = data.employees;
-        itemPage.itemQuantities = data.item_quantities;
         var location_keys = Object.keys(data.stock_locations);
+        var stockId = selectStock.currentIndex < 0 ? -1:stockSelectComboBoxModel.get(selectStock.currentIndex).stock_id;
+        stockSelectComboBoxModel.clear();
         for (var cnt = 0; cnt < location_keys.length; ++cnt) {
             stockSelectComboBoxModel.append({
                                                 name: data.stock_locations[location_keys[cnt]],
                                                 stock_id: location_keys[cnt]
                                             });
+            if (stockId === location_keys[cnt]) {
+                selectStock.changeIndexWithoutAction = true;
+                selectStock.currentIndex = cnt;
+            }
         }
 
-    }
+        if (location_keys.length > 0 && selectStock.currentIndex < 0) {
+            selectStock.changeIndexWithoutAction = true;
+            selectStock.currentIndex = 0;
+        }
 
-    function updateTransactionList() {
         var options = {day: '2-digit', month: '2-digit', year: 'numeric',  hour: '2-digit', minute: '2-digit'};
-        itemTransactionListModel.clear();
         var currentStockId = stockSelectComboBoxModel.get(selectStock.currentIndex).stock_id;
 
-        stockQuantity.text = itemPage.itemQuantities[currentStockId];
+        stockQuantity.text = parseInt(data.item_quantities[currentStockId]);
 
-        for (var cnt = 0; cnt < itemPage.item_transactions.length; ++cnt) {
-            var transaction = itemPage.item_transactions[cnt];
+        itemTransactionListModel.clear();
+        for (cnt = 0; cnt < data.inventory.length; ++cnt) {
+            var transaction = data.inventory[cnt];
             if (currentStockId === transaction["trans_location"])
                 itemTransactionListModel.append({
                                                 date: new Date(transaction["trans_date"]).toLocaleString("tr-TR", options),
-                                                user: itemPage.employees[transaction["trans_user"]],
+                                                user: data.employees[transaction["trans_user"]],
                                                 description: transaction["trans_comment"],
-                                                quantity: transaction["trans_inventory"]
+                                                quantity: parseInt(transaction["trans_inventory"])
                                             });
         }
     }
@@ -69,51 +124,158 @@ Page {
         source: "../../sounds/220197-click-basic.wav"
     }
 
+    Popup{
+        id: updateStockPopup
+        width: parent.width * 0.5
+        height: parent.height * 0.5
+        x: parent.width * 0.25
+        y: parent.height * 0.2
+        z: Infinity
+        modal: true
+        focus: true
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+
+        onVisibleChanged: {
+            if (!visible) {
+                newQuantityField.text = "";
+                newQuantityField.needValidate = false;
+                commentField.text = "";
+            }
+        }
+
+        Rectangle{
+            width: parent.width * 0.9
+            height: parent.height * 0.9
+            anchors.centerIn: parent
+            Text {
+                id: descriptionText
+                text: "Stoğu Güncelle"
+                color: "slategray"
+                font.pixelSize: 24
+                font.family: Fonts.fontRubikRegular.name
+                anchors.top: parent.top
+                width: parent.width
+                horizontalAlignment: "AlignHCenter"
+            }
+            TextField {
+                id: newQuantityField
+                required: true
+                anchors.right: parent.right
+                anchors.top: descriptionText.bottom
+                horizontalAlignment: "AlignHCenter"
+                anchors.topMargin: 20
+                width: parent.width
+                validator: IntValidator {}
+                font.family: Fonts.fontRubikRegular.name
+                placeholderText: "Stok Miktarı"
+            }
+            TextField {
+                id: commentField
+                anchors.right: parent.right
+                anchors.top: newQuantityField.bottom
+                horizontalAlignment: "AlignHCenter"
+                anchors.topMargin: 5
+                width: parent.width
+                font.family: Fonts.fontRubikRegular.name
+                placeholderText: "Açıklama"
+            }
+
+            Button {
+                id:cancelButton
+                text: "İptal"
+                height: 40
+                width: 100
+                anchors.left: parent.left
+                anchors.bottom: parent.bottom
+                font.pixelSize: 24
+                onClicked:{
+                    updateStockPopup.visible = false
+                }
+            }
+
+            Button {
+                id:updateButton
+                text: "Güncelle"
+                height: 40
+                width: 100
+                anchors.right: parent.right
+                anchors.bottom: parent.bottom
+                font.pixelSize: 24
+                borderColor: "mediumseagreen"
+                onClicked:{
+                    newQuantityField.needValidate = true;
+
+                    if (newQuantityField.isInvalid())
+                        toast.showError("Stok Miktarı Boş Bırakılamaz!", 3000);
+                    else
+                        itemRequest.post("items/save_inventory/" + item_id,
+                                     {
+                                         stock_location: stockSelectComboBoxModel.get(selectStock.currentIndex).stock_id,
+                                         newquantity: newQuantityField.text,
+                                         trans_comment: commentField.text
+                                     },
+                                     function(code, jsonStr) {
+                                         var response = JSON.parse(jsonStr);
+                                         if (response.success) {
+                                             toast.showSuccess(response.message, 3000);
+                                             getTransactions();
+                                         }
+                                         else
+                                             toast.showError(response.message, 3000);
+                                         updateStockPopup.visible = false;
+                                     });
+                }
+            }
+        }
+    }
+
     ComboBox {
         id: selectLastTransactionsByDate
-        KeyNavigation.down: listMenu
         anchors.left: parent.left
         anchors.top: parent.top
         anchors.topMargin: 4
         anchors.leftMargin: 4
-        model:["Tüm Zamanlar", "Bugün", "Dün", "Geçen Hafta", "Geçen Ay", "Geçen 3 Ay", "Geçen 6 Ay", "Geçen Yıl"]
+        model: ListModel{
+            ListElement{name:"Son 1 Gün"}
+            ListElement{name:"Son 3 Gün"}
+            ListElement{name:"Son 1 Hafta"}
+            ListElement{name:"Son 1 Ay"}
+            ListElement{name:"Son 6 Ay"}
+            ListElement{name:"Son 1 Yıl"}
+            ListElement{name:"Tüm Zamanlar"}
+        }
         spacing: 5
         height: 50
-        padding: 10
-        font.pixelSize: 18
-        font.family: Fonts.fontBarlowRegular.name
+        font.pixelSize: 24
         width: 150
-        background: Rectangle{
-            implicitHeight: parent.height
-            implicitWidth: parent.width
-            color: parent.activeFocus?"dodgerblue":"lightslategray"
-            radius: 0
+        placeholderText: "İşlem Geçmişi"
+        property bool currentIndexFirstChange: false
+        onCurrentIndexChanged: {
+            if (!currentIndexFirstChange)
+                currentIndexFirstChange = true;
+            else
+                getTransactions();
         }
     }
 
     ComboBox {
         id: selectStock
-        KeyNavigation.down: listMenu
         anchors.right: parent.right
         anchors.top: parent.top
         anchors.topMargin: 4
         anchors.rightMargin: 4
         model:ListModel{id: stockSelectComboBoxModel}
-        textRole: "name"
         spacing: 5
         height: 50
-        padding: 10
-        font.pixelSize: 28
-        font.family: Fonts.fontBarlowRegular.name
+        font.pixelSize: 24
         width: 150
-        background: Rectangle{
-            implicitHeight: parent.height
-            implicitWidth: parent.width
-            color: parent.activeFocus?"dodgerblue":"lightslategray"
-            radius: 0
-        }
+        property bool changeIndexWithoutAction:true
+        placeholderText: "Stok"
         onCurrentIndexChanged: {
-            updateTransactionList();
+            if (changeIndexWithoutAction)
+                changeIndexWithoutAction = false
+            else if (currentIndex >= 0)
+                getTransactions();
         }
     }
 
@@ -123,14 +285,13 @@ Page {
         anchors.left: selectLastTransactionsByDate.right
         anchors.top: parent.top
         antialiasing: true;
-        anchors.leftMargin: 4
-        anchors.rightMargin: 4
-        color: "#d6e6f6"
-        height: 58
+        anchors.margins: 4
+        color: "#f7f8fa"
+        height: 50
         Text {
             id: barcodeText
             text: ""
-            color: "#545454"
+            color: "slategray"
             font.pixelSize: 14
             font.family: Fonts.fontRubikRegular.name
             anchors.left: parent.left
@@ -143,8 +304,8 @@ Page {
             id: itemNameText
             text: ""
             anchors.topMargin: -6
-            color: "#545454"
-            font.pixelSize: 32
+            color: "slategray"
+            font.pixelSize: 24
             font.family: Fonts.fontTomorrowRegular.name
             anchors.left: parent.left
             width: parent.width
@@ -167,7 +328,7 @@ Page {
         Rectangle {
             width: parent.width
             anchors.top: parent.top
-            height: 2
+            height: 1
             color: list1.activeFocus?"dodgerblue":"slategray"
         }
 
@@ -191,62 +352,75 @@ Page {
                     color: "transparent"
                     antialiasing: true
                     radius: 4
-
-                    Rectangle {
-                        anchors.fill: parent;
-                        anchors.margins: 3;
-                        antialiasing: true;
-                        color: "transparent"
+                    ListViewColumnLabel{
+                        text: "İşlem Tarihi"
+                        labelOf: dateText
+                    }
                         Text {
-                            id: label1
+                            id: dateText
                             text: date
                             color: "#545454"
-                            font.pixelSize: 20
+                            font.pixelSize: 18
                             font.family: Fonts.fontRubikRegular.name
                             anchors.left: parent.left
-                            width: 200
+                            width: parent.width/4
                             horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
                             anchors.top: parent.top
-                            anchors.topMargin: 7
+                            anchors.bottom: parent.bottom
+                        }
+                        ListViewColumnLabel{
+                            text: "Kullanıcı"
+                            labelOf: userText
                         }
                         Text {
-                            id: label2
+                            id: userText
                             text: user
                             color: "#545454"
-                            font.pixelSize: 20
+                            font.pixelSize: 18
                             font.family: Fonts.fontRubikRegular.name
-                            anchors.left: label1.right
-                            width: 150
+                            anchors.left: dateText.right
+                            width: parent.width/4
                             horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
                             anchors.top: parent.top
-                            anchors.topMargin: 7
+                            anchors.bottom: parent.bottom
+                        }
+                        ListViewColumnLabel{
+                            text: "Açıklama"
+                            labelOf: descText
                         }
                         Text {
-                            id: label3
+                            id: descText
                             text: description
                             color: "#545454"
-                            font.pixelSize: 20
+                            font.pixelSize: 18
                             font.family: Fonts.fontRubikRegular.name
-                            width: parent.width - 500
-                            anchors.left: label2.right
-                            anchors.leftMargin: 20
+                            verticalAlignment: Text.AlignVCenter
+                            horizontalAlignment: Text.AlignLeft
+                            width: (parent.width/8)*3
+                            anchors.left: userText.right
                             anchors.top: parent.top
-                            anchors.topMargin: 7
+                            anchors.bottom: parent.bottom
+                        }
+                        ListViewColumnLabel{
+                            text: "Miktar"
+                            labelOf: quantityText
                         }
                         Text {
-                            id: label4
+                            id: quantityText
                             horizontalAlignment: Text.AlignRight
+                            verticalAlignment: Text.AlignVCenter
                             anchors.rightMargin: 4
                             anchors.right : parent.right
                             text: quantity
                             color: "#545454"
-                            font.pixelSize: 24
+                            font.pixelSize: 20
                             font.family: Fonts.fontIBMPlexMonoRegular.name
-                            width: 150
+                            width: parent.width/8
                             anchors.top: parent.top
-                            anchors.topMargin: 4
+                            anchors.bottom: parent.bottom
                         }
-                    }
                 }
 
                 MouseArea {
@@ -263,11 +437,11 @@ Page {
 
                 states: State {
                     name: "active"; when: container.activeFocus
-                    PropertyChanges { target: content; color: "dodgerblue"; height: 50; width: container.width - 10; anchors.leftMargin: 10; anchors.rightMargin: 10 }
-                    PropertyChanges { target: label1; font.pixelSize: 24; font.bold: true; color: "white" }
-                    PropertyChanges { target: label2; font.pixelSize: 24; font.bold: true; color: "white" }
-                    PropertyChanges { target: label3; font.pixelSize: 24; font.bold: true; color: "white" }
-                    PropertyChanges { target: label4; font.pixelSize: 28; color: "white"; font.family: Fonts.fontIBMPlexMonoSemiBold.name }
+                    PropertyChanges { target: content; color: "#CCD1D9"; height: 50; width: container.width - 15; anchors.leftMargin: 10; anchors.rightMargin: 15 }
+                    PropertyChanges { target: dateText; font.pixelSize: 22; }
+                    PropertyChanges { target: userText; font.pixelSize: 22; }
+                    PropertyChanges { target: descText; font.pixelSize: 22; }
+                    PropertyChanges { target: quantityText; font.pixelSize: 24; font.family: Fonts.fontIBMPlexMonoSemiBold.name }
                 }
 
                 transitions: Transition {
@@ -287,7 +461,7 @@ Page {
         Rectangle {
             width: parent.width
             anchors.bottom: parent.bottom
-            height: 2
+            height: 1
             color: list1.activeFocus?"dodgerblue":"slategray"
         }
     }
@@ -295,6 +469,7 @@ Page {
     Rectangle {
         anchors.bottom: parent.bottom
         anchors.left: updateStockButton.right
+        anchors.margins: 4
         width: parent.width - 316
         height: 50
 
@@ -303,21 +478,21 @@ Page {
             text: "Stok Miktarı:"
             width: parent.width
             anchors.top: parent.top
-            anchors.topMargin: -8
+            anchors.topMargin: 3
             horizontalAlignment: "AlignHCenter"
             font.family: "Arial"
-            font.pointSize: 12
+            font.pixelSize: 12
             color: "steelblue"
         }
         Label {
             id: stockQuantity
             anchors.top: itemNum.bottom
-            anchors.topMargin: -12
+            anchors.topMargin: -9
             horizontalAlignment: "AlignHCenter"
             width: parent.width
             text: "0"
             font.family: Fonts.fontIBMPlexMonoRegular.name
-            font.pointSize: 32
+            font.pixelSize: 32
             font.bold: true
             color: "steelblue"
         }
@@ -330,18 +505,11 @@ Page {
         anchors.bottomMargin: 4
         anchors.leftMargin: 4
         text: "Stoğu Güncelle"
-        spacing: 5
-        autoExclusive: false
         height: 50
         width: 150
-        padding: 10
-        checkable: true
-        font.family: Fonts.fontBarlowRegular.name
-        font.pointSize: 18
-        background: Rectangle{
-            anchors.fill:parent
-            color: parent.activeFocus?"darksalmon":"salmon"
-        }
+        font.pixelSize: 24
+        borderColor:"salmon"
+        onClicked: updateStockPopup.visible = true
     }
 
     Button {
@@ -351,17 +519,8 @@ Page {
         anchors.bottomMargin: 4
         anchors.rightMargin: 4
         text: "Barkod Yazdır"
-        spacing: 5
-        autoExclusive: false
         height: 50
         width: 150
-        padding: 10
-        checkable: true
-        font.family: Fonts.fontBarlowRegular.name
-        font.pointSize: 20
-        background: Rectangle{
-            anchors.fill:parent
-            color: parent.activeFocus?"dodgerblue":"slategray"
-        }
+        font.pixelSize: 24
     }
 }
