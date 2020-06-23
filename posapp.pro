@@ -19,6 +19,6 @@ DEFINES += QT_DEPRECATED_WARNINGS
 #DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0x060000    # disables all the APIs deprecated before Qt 6.0.0
 
 # Input
-HEADERS += Headers/Services/restrequest.h
-SOURCES += Sources/main.cpp Sources/Services/restrequest.cpp
+HEADERS += Headers/Services/osservice.h Headers/Services/restrequest.h Headers/Services/updateservice.h
+SOURCES += Sources/main.cpp Sources/Services/osservice.cpp Sources/Services/restrequest.cpp Sources/Services/updateservice.cpp
 RESOURCES += Resources/qml.qrc

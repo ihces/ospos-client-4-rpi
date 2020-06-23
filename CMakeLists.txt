@@ -11,10 +11,14 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(Qt5 COMPONENTS Core Quick REQUIRED)
 
 set(HEADERS
-    "Headers/Services/restrequest.h")
+    "Headers/Services/updateservice.h"
+    "Headers/Services/restrequest.h"
+    "Headers/Services/osservice.h")
 
 set(SOURCES
+    "Sources/Services/updateservice.cpp"
     "Sources/Services/restrequest.cpp"
+    "Sources/Services/osservice.cpp"
     "Sources/main.cpp")
 
 set(RESOURCES

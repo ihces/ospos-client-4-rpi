@@ -10,7 +10,7 @@ Text {
     anchors.leftMargin: labelOf.anchors.leftMargin
     anchors.rightMargin: labelOf.anchors.rightMargin
     anchors.topMargin: 0
-    visible: labelOf.parent.parent.activeFocus
+    visible: labelOf.visible && labelOf.parent.parent.activeFocus
     font.family: Fonts.fontRubikRegular.name
     color: labelOf.color
     opacity: 0.48

@@ -5,11 +5,14 @@ import posapp.restrequest 1.0
 
 import "../../fonts"
 import "../controls"
+import "../helpers/helper.js" as Helper
 
 Page {
     id: itemPage
     width:  800 //parent
-    height:  440 //parent
+    height:  430 //parent
+    property string unitPrice
+    property string companyName
     property int item_id
     property int busyIndicatorCnt: 0
 
@@ -19,7 +22,11 @@ Page {
         id:itemRequest
 
         onSessionTimeout: {
-            salePage.parent.pop();
+            itemPage.parent.pop();
+        }
+
+        onRequestTimeout: {
+            itemPage.parent.pop();
         }
 
         onStart: {busyIndicatorCnt++; busyIndicator.running = true}
@@ -27,7 +34,7 @@ Page {
     }
 
     Component.onCompleted: {
-        selectLastTransactionsByDate.currentIndex = 6
+        selectLastTransactionsByDate.currentIndex = 4
     }
 
     ToastManager {
@@ -80,6 +87,7 @@ Page {
     }
 
     function updateData(data) {
+        companyName = data.company_name;
         barcodeText.text = data.item_info.item_number;
         itemNameText.text = data.item_info.name;
         var location_keys = Object.keys(data.stock_locations);
@@ -121,7 +129,7 @@ Page {
 
     SoundEffect {
         id: clickBasicSound
-        source: "../../sounds/220197-click-basic.wav"
+        source: "../../sounds/click.wav"
     }
 
     Popup{
@@ -130,7 +138,7 @@ Page {
         height: parent.height * 0.5
         x: parent.width * 0.25
         y: parent.height * 0.2
-        z: Infinity
+        z: 200
         modal: true
         focus: true
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
@@ -265,6 +273,7 @@ Page {
         anchors.topMargin: 4
         anchors.rightMargin: 4
         model:ListModel{id: stockSelectComboBoxModel}
+        enabled: stockSelectComboBoxModel.count > 1
         spacing: 5
         height: 50
         font.pixelSize: 24
@@ -522,5 +531,10 @@ Page {
         height: 50
         width: 150
         font.pixelSize: 24
+        onClicked: {
+            postRequest("print_barcode", {company_name: companyName, item_number:barcodeText.text, name: itemNameText.text, price: unitPrice.substring(0, unitPrice.length-1)}, 5000, function() {
+                toast.showError("barkod yazdırılamadı!", 3000);
+            });
+        }
     }
 }

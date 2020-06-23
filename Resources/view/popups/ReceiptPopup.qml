@@ -2,18 +2,22 @@ import QtQuick 2.7
 import QtQuick.Controls 2.2
 import posapp.restrequest 1.0
 import "../../fonts"
+import "../helpers/helper.js" as Helper
 
 Popup{
     id: control
     width: 300
     x: 250
     y: (parent.height-control.height)/2.0
-    z: Infinity
+    z: 100
 
     RestRequest {
         id: receiptRequest
 
         onSessionTimeout: {
+            stack.pop();
+        }
+        onRequestTimeout: {
             stack.pop();
         }
     }
@@ -26,51 +30,53 @@ Popup{
         return getReceiptHeight() > 440;
     }
 
-
-
-    function getReceipt(transactionTypeDir, receiptId) {
+    function getReceipt(transactionTypeDir, receiptId, print) {
         receiptRequest.get(transactionTypeDir + "/receipt/" + receiptId + "/json", function(code, jsonStr) {
             var data = JSON.parse(jsonStr);
+
             transactionTime.text = data.transaction_time;
-            console.log(transactionTime.text);
             companyName.text = data.company_name;
             companyAddress.text = data.company_address;
             companyPhone.text = data.company_phone;
             returnPolicy.text = data.return_policy;
             employeeName.text = "Kasiyer: " + data.employee;
-            barcode.source = "data:image/png;base64," + data.barcode;
+            //barcode.source = "data:image/png;base64," + data.barcode;
             if (transactionTypeDir === "sales") {
-                customerOrSupplierName.text = "Müşteri: " + data.customer;
-                transactionId.text = data.sale_id;
+                customerOrSupplierName.text = data.customer?"Müşteri: " + data.customer:"";
+                transactionIdWithLabel.text = "İşlem No :" + data.sale_id;
                 modeLabel.text = data.mode_label;
             }
             else {
-                customerOrSupplierName.text = "Satıcı: " + data.supplier;
-                transactionId.text = data.receiving_id;
-                modeLabel.text = data.mode;
+                customerOrSupplierName.text = data.supplier?"Satıcı: " + data.supplier: "";
+                transactionIdWithLabel.text = "İşlem No :" + data.receiving_id;
+                modeLabel.text = data.mode = data.mode === "receive"?"Alım Fişi": "İade Fişi";
             }
-            console.log(employeeName.text);
             cartListViewModel.clear();
             var keys = Object.keys(data.cart);
             for (var cnt = 0; cnt < keys.length; ++cnt) {
                 var item = data.cart[keys[cnt]];
-                cartListViewModel.append({name: item.name, quantity: parseInt(item.quantity), price: parseFloat(item.total).toFixed(2) + "₺"});
+                cartListViewModel.append({name: item.name, quantityNunitPrice: parseInt(item.quantity) + " x " + parseFloat(item.price).toFixed(2), price: parseFloat(item.total).toFixed(2)});
             }
             cart.height = 40 * keys.length;
             paymentListViewModel.clear();
-            paymentListViewModel.append({type: "Toplam", amount: parseFloat(data.total).toFixed(2) + "₺"});
-            console.log("allllo");
+            paymentListViewModel.append({type: "Toplam", amount: parseFloat(data.total).toFixed(2)});
             if (transactionTypeDir === "sales") {
                 var payment_keys = Object.keys(data.payments);
                 for (cnt=0; cnt < payment_keys.length; cnt++) {
                     var payment = data["payments"][payment_keys[cnt]];
-                    paymentListViewModel.append({type: payment.payment_type, amount: parseFloat(payment.payment_amount).toFixed(2) + "₺"});
+                    paymentListViewModel.append({type: payment.payment_type, amount: parseFloat(payment.payment_amount).toFixed(2)});
                 }
-                paymentListViewModel.append({type: "Para Üstü", amount: parseFloat(data.amount_change).toFixed(2) + "₺"});
+                paymentListViewModel.append({type: "Para Üstü", amount: parseFloat(data.amount_change).toFixed(2)});
             }
             else
                 paymentListViewModel.append({type: "Ödeme Şekli", amount: data.payment_type});
             payments.height = 20 * paymentListViewModel.count;
+
+            if (print !== undefined && print) {
+                postRequest("print_receipt", data, cartListViewModel.count * 1000 + 6000, function() {
+                    toast.showError("Fiş yazdırılamadı!", 3000);
+                });
+            }
 
             control.visible = true;
         });
@@ -134,21 +140,9 @@ Popup{
                 horizontalAlignment: "AlignHCenter"
             }
             Text {
-                id: customerOrSupplierName
-                anchors.top: transactionTime.bottom
-                anchors.left: parent.left
-                color: "darkslategray"
-                font.pixelSize: 14
-                font.family: Fonts.fontRubikRegular.name
-                anchors.leftMargin: 5
-                anchors.topMargin: 10
-                width: parent.width-4
-                horizontalAlignment: Text.AlignLeft
-            }
-            Text {
                 id: transactionIdWithLabel
-                text: "İşlem No: " + transactionId.text
-                anchors.top: customerOrSupplierName.bottom
+                anchors.top: transactionTime.bottom
+                anchors.topMargin: 10
                 anchors.left: parent.left
                 color: "darkslategray"
                 font.pixelSize: 14
@@ -158,7 +152,7 @@ Popup{
                 horizontalAlignment: Text.AlignLeft
             }
             Text {
-                id: employeeName
+                id: customerOrSupplierName
                 anchors.top: transactionIdWithLabel.bottom
                 anchors.left: parent.left
                 color: "darkslategray"
@@ -166,21 +160,25 @@ Popup{
                 font.family: Fonts.fontRubikRegular.name
                 anchors.leftMargin: 5
                 width: parent.width-4
+                visible: text.length > 0
                 horizontalAlignment: Text.AlignLeft
             }
-
-            Rectangle {
-                id: topLine
+            Text {
+                id: employeeName
+                anchors.top: customerOrSupplierName.visible?customerOrSupplierName.bottom:transactionIdWithLabel.bottom
+                anchors.left: parent.left
                 color: "darkslategray"
-                width: parent.width
-                height: 1
-                anchors.top: employeeName.bottom
-                anchors.topMargin: 5
+                font.pixelSize: 14
+                font.family: Fonts.fontRubikRegular.name
+                anchors.leftMargin: 5
+                width: parent.width-4
+                horizontalAlignment: Text.AlignLeft
             }
 
             ListView {
                 id: cart
-                anchors.top: topLine.bottom
+                anchors.top: employeeName.bottom
+                anchors.topMargin: 14
                 width: parent.width
                 model: ListModel {
                     id: cartListViewModel
@@ -205,14 +203,14 @@ Popup{
                                 anchors.top: parent.top
                             }
                             Text {
-                                id: quantityText
-                                text: quantity
+                                id: quantityNunitPriceText
+                                text: quantityNunitPrice
                                 color: "#545454"
                                 font.pixelSize: 14
                                 font.family: Fonts.fontRubikRegular.name
                                 anchors.top: nameText.bottom
-                                anchors.right: priceText.left
-                                width: parent.width/3.0
+                                anchors.left: parent.left
+                                width: parent.width/2.0
                                 horizontalAlignment: Text.AlignLeft
                             }
                             Text {
@@ -225,7 +223,7 @@ Popup{
                                 color: "#545454"
                                 font.pixelSize: 14
                                 font.family: Fonts.fontRubikRegular.name
-                                width: parent.width/3.0
+                                width: parent.width/2.0
                             }
                     }
                 }
@@ -286,11 +284,11 @@ Popup{
                 font.pixelSize: 14
                 font.family: Fonts.fontRubikRegular.name
                 anchors.top: payments.bottom
-                anchors.topMargin: 10
+                anchors.topMargin: 14
                 width: parent.width
                 horizontalAlignment: "AlignHCenter"
             }
-            Image {
+            /*Image {
                 id: barcode
                 anchors.top: returnPolicy.bottom
                 width: parent.width
@@ -304,7 +302,7 @@ Popup{
                 font.family: Fonts.fontRubikRegular.name
                 width: parent.width
                 horizontalAlignment: Text.AlignHCenter
-            }
+            }*/
         }
     }
 }

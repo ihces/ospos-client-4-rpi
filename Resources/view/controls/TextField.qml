@@ -12,27 +12,32 @@ TextField {
     font.family: Fonts.fontRubikRegular.name
     placeholderText: ""
     horizontalAlignment: "AlignLeft"
+    verticalAlignment: "AlignVCenter"
     property bool required: false
     property bool needValidate: false
     background: Rectangle {
-        border.color: isInvalid()?"salmon":(control.activeFocus?"mediumturquoise":"lightslategray")
+        border.color: !control.enabled?"#c4d5e6":(isInvalid()?"salmon":(control.activeFocus?"mediumturquoise":"lightslategray"))
         border.width: 1
         color: control.activeFocus ?(isInvalid()?"salmon":"mediumturquoise"): "transparent"
     }
 
     function isInvalid() {
-        if (needValidate && required && control.text.trim().length === 0 )
-            return true;
-        else
-            return false;
+        if (needValidate) {
+            if (control.validator && control.validator.Invalid && control.text.trim().length > 0)
+                return true;
+            if (required && control.text.trim().length === 0)
+                return true;
+        }
+
+        return false;
     }
 
     Text {
         id: topPlaceholder
         anchors.left: control.left
         anchors.top: control.top
-        anchors.leftMargin: 6
-        anchors.topMargin: 2
+        anchors.leftMargin: control.leftPadding
+        anchors.topMargin: control.height > 45 || control.font.family === Fonts.fontOrbitronRegular.name?4:2
         text: control.placeholderText
         visible: control.text.length > 0
         font.family: control.font.family

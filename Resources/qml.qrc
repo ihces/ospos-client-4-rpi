@@ -38,15 +38,6 @@
         <file>fonts/product/Fondamento-Regular.ttf</file>
         <file>view/page/Payment.qml</file>
         <file>view/page/Account.qml</file>
-        <file>sounds/220176-confirm-click-spacey.wav</file>
-        <file>sounds/220187-deny-casual-1.wav</file>
-        <file>sounds/220197-click-basic.wav</file>
-        <file>sounds/278204-switch.wav</file>
-        <file>sounds/366102-confirmation-upward.wav</file>
-        <file>sounds/366103-error-wooden.wav</file>
-        <file>sounds/366104-confirmation-downward.wav</file>
-        <file>sounds/388046-beep-up.wav</file>
-        <file>sounds/404151-granted-01.wav</file>
         <file>view/page/Home.qml</file>
         <file>fonts/product/Tomorrow-Regular.ttf</file>
         <file>view/images/bracket.png</file>
@@ -61,8 +52,39 @@
         <file>view/controls/Toast.qml</file>
         <file>fonts/product/Nunito-BoldItalic.ttf</file>
         <file>view/controls/Button.qml</file>
-        <file>view/page/ReceiptPopup.qml</file>
         <file>view/controls/ListViewColumnLabel.qml</file>
         <file>view/page/SupplierAccount.qml</file>
+        <file>view/popups/qmldir</file>
+        <file>view/popups/ReceiptPopup.qml</file>
+        <file>view/popups/SuspendedPopup.qml</file>
+        <file>view/popups/SelectCustomerPopup.qml</file>
+        <file>view/helpers/helper.js</file>
+        <file>view/popups/DialogPopup.qml</file>
+        <file>view/popups/FavoriteItemsPopup.qml</file>
+        <file>view/page/Receive.qml</file>
+        <file>view/popups/SelectSupplierPopup.qml</file>
+        <file>sounds/add_to_cart_success.wav</file>
+        <file>sounds/error.wav</file>
+        <file>sounds/switch.wav</file>
+        <file>sounds/success.wav</file>
+        <file>sounds/disabled.wav</file>
+        <file>sounds/click.wav</file>
+        <file>sounds/complete.wav</file>
+        <file>sounds/payment.wav</file>
+        <file>sounds/delete.wav</file>
+        <file>sounds/suspend.wav</file>
+        <file>sounds/warning.wav</file>
+        <file>sounds/customer_selected.wav</file>
+        <file>sounds/confirmation.wav</file>
+        <file>sounds/unsuspend.wav</file>
+        <file>sounds/mode_changed.wav</file>
+        <file>sounds/cancel.wav</file>
+        <file>sounds/customer_removed.wav</file>
+        <file>sounds/popup.wav</file>
+        <file>sounds/item_decrease.wav</file>
+        <file>sounds/item_increase.wav</file>
+        <file>images/logo.png</file>
+        <file>images/logo-small.png</file>
+        <file>images/product-logo.png</file>
     </qresource>
 </RCC>

@@ -1,17 +1,32 @@
 #include "Headers/Services/restrequest.h"
+#include <QSettings>
 #include <QtNetwork>
 #include <QString>
 #include <QLinkedList>
 #include <QList>
+#include <QTimer>
 
 QMap<QString, QNetworkCookie> RestRequest::cookies;
 QMutex RestRequest::cookieMutex;
 bool RestRequest::m_sessionTimeout = true;
+QByteArray RestRequest::csrf_ospos_v3 = "f422fcc283ce95334506eb40fa3628d8";
+
+QSettings *settings;
 
 RestRequest::RestRequest() {
+    settings = new QSettings("posapp.ini", QSettings::NativeFormat);
+    RestRequest::csrf_ospos_v3 = settings->value("CSRF_OSPOS_V3", "f422fcc283ce95334506eb40fa3628d8").toByteArray();
 }
 
 RestRequest::~RestRequest() {
+    QLinkedList<QTimer*>::iterator iter;
+    for (iter = timerList.begin(); iter != timerList.end(); ++iter)
+        if ((*iter)->isActive()) {
+            disconnect(*iter, &QTimer::timeout, this, nullptr);
+            (*iter)->stop();
+            emit this->end();
+            iter = timerList.erase(iter);
+        }
 }
 
 bool RestRequest::isSessionTimeout() const{
@@ -20,7 +35,7 @@ bool RestRequest::isSessionTimeout() const{
 
 void RestRequest::login(QByteArray username, QByteArray password)
 {
-    QNetworkRequest request(QUrl("https://192.168.1.41/login"));
+    QNetworkRequest request(QUrl("https://3.123.73.136/login"));
 
     QSslConfiguration conf = request.sslConfiguration();
     conf.setPeerVerifyMode(QSslSocket::VerifyNone);
@@ -47,7 +62,22 @@ void RestRequest::login(QByteArray username, QByteArray password)
     emit start();
     QNetworkAccessManager *nam = new QNetworkAccessManager(this);
     QNetworkReply *reply = nam->post(request, multipart);
-    connect(reply, &QNetworkReply::finished, this, [this, reply] {
+
+    QTimer* timer4timeout = new QTimer();
+    timer4timeout->setSingleShot(true);
+    connect(timer4timeout, &QTimer::timeout,[this, reply]() {
+        qDebug()<<"aaaaaaaaaaaaa";
+        disconnect(reply, &QNetworkReply::finished, this, NULL);
+        reply->abort();
+        emit this->end();
+        emit this->requestTimeout();
+    });
+    timer4timeout->start(5000);
+
+    connect(reply, &QNetworkReply::finished, this, [this, reply, timer4timeout] {
+        if (timer4timeout->isActive())
+            timer4timeout->stop();
+
         this->updateCookies(reply);
 
         QVariant possibleRedirectUrl = reply->attribute(QNetworkRequest::RedirectionTargetAttribute);
@@ -61,8 +91,12 @@ void RestRequest::login(QByteArray username, QByteArray password)
         emit loginCompleted(succeed, reply->errorString());
         emit end();
     });
+
     clearFinishedReplies();
     replyList.append(reply);
+
+    clearFinishedTimers();
+    timerList.append(timer4timeout);
 }
 
 void RestRequest::updateCookies(QNetworkReply *reply)
@@ -73,6 +107,8 @@ void RestRequest::updateCookies(QNetworkReply *reply)
     cookieMutex.lock();
     for (QNetworkCookie cookie : _cookies)
     {
+        if (cookie.name() == "csrf_cookie_ospos_v3")
+            settings->setValue("CSRF_OSPOS_V3", cookie.value());
         RestRequest::cookies.insert(QString::fromStdString(cookie.name().toStdString()), cookie);
     }
     cookieMutex.unlock();
@@ -85,7 +121,7 @@ void RestRequest::error(QNetworkReply::NetworkError code) {
     qDebug() << "QNetworkReply::NetworkError " << code << "received";
 }
 void RestRequest::get(QString url, QVariantMap params, QJSValue value) {
-    QUrl _url = QUrl("https://192.168.1.41/" + url);
+    QUrl _url = QUrl("https://3.123.73.136/" + url);
     if (!params.isEmpty()) {
         QUrlQuery query(_url);
 
@@ -114,7 +150,21 @@ void RestRequest::get(QString url, QVariantMap params, QJSValue value) {
     emit start();
     QNetworkAccessManager *name = new QNetworkAccessManager(this);
     QNetworkReply *reply = name->get(request);
-    connect(reply, &QNetworkReply::finished, this, [this, value, reply](){
+
+    QTimer* timer4timeout = new QTimer();
+    timer4timeout->setSingleShot(true);
+    connect(timer4timeout, &QTimer::timeout,[this, reply]() {
+        disconnect(reply, &QNetworkReply::finished, this, NULL);
+        reply->abort();
+        emit this->end();
+        emit this->requestTimeout();
+    });
+    timer4timeout->start(5000);
+
+    connect(reply, &QNetworkReply::finished, this, [this, value, reply, timer4timeout](){
+        if (timer4timeout->isActive())
+            timer4timeout->stop();
+
         QVariant statusCode = reply->attribute( QNetworkRequest::HttpStatusCodeAttribute );
         if ( !statusCode.isValid() )
             return;
@@ -145,8 +195,12 @@ void RestRequest::get(QString url, QVariantMap params, QJSValue value) {
             emit end();
         }
     });
+
     clearFinishedReplies();
     replyList.append(reply);
+
+    clearFinishedTimers();
+    timerList.append(timer4timeout);
 }
 
 void RestRequest::clearFinishedReplies() {
@@ -157,12 +211,19 @@ void RestRequest::clearFinishedReplies() {
             iter = replyList.erase(iter);
 }
 
+void RestRequest::clearFinishedTimers() {
+    QLinkedList<QTimer*>::iterator iter;
+    for (iter = timerList.begin(); iter != timerList.end(); ++iter)
+        if (!(*iter)->isActive())
+            iter = timerList.erase(iter);
+}
+
 void RestRequest::post(QString url, QJSValue value) {
     this->post(url, QVariantMap(), value);
 }
 
 void RestRequest::post(QString url, QVariantMap params, QJSValue value) {
-    QNetworkRequest request(QUrl("https://192.168.1.41/" + url));
+    QNetworkRequest request(QUrl("https://3.123.73.136/" + url));
 
     QSslConfiguration conf = request.sslConfiguration();
     conf.setPeerVerifyMode(QSslSocket::VerifyNone);
@@ -202,9 +263,23 @@ void RestRequest::post(QString url, QVariantMap params, QJSValue value) {
     emit start();
     QNetworkAccessManager *nam = new QNetworkAccessManager(this);
     QNetworkReply *reply = nam->post(request, multipart);
-    connect(reply, &QNetworkReply::finished, this, [this, value, reply](){
+
+    QTimer* timer4timeout = new QTimer();
+    timer4timeout->setSingleShot(true);
+    connect(timer4timeout, &QTimer::timeout,[this, reply]() {
+        disconnect(reply, &QNetworkReply::finished, this, NULL);
+        reply->abort();
+        emit this->end();
+        emit this->requestTimeout();
+    });
+    timer4timeout->start(5000);
+
+    connect(reply, &QNetworkReply::finished, this, [this, value, reply, timer4timeout](){
+        if (timer4timeout->isActive())
+            timer4timeout->stop();
+
         QVariant statusCode = reply->attribute( QNetworkRequest::HttpStatusCodeAttribute );
-        if ( !statusCode.isValid() )
+        if ( !statusCode.isValid())
             return;
         if (300 <= statusCode.toInt() &&  statusCode.toInt() < 400)
         {
@@ -235,4 +310,7 @@ void RestRequest::post(QString url, QVariantMap params, QJSValue value) {
 
     clearFinishedReplies();
     replyList.append(reply);
+
+    clearFinishedTimers();
+    timerList.append(timer4timeout);
 }

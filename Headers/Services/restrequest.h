@@ -7,6 +7,7 @@
 #include <QString>
 #include <QLinkedList>
 #include <QMutex>
+#include <QTimer>
 
 class RestRequest : public QObject
 {
@@ -25,6 +26,7 @@ signals:
     void start();
     void end();
     void sessionTimeout();
+    void requestTimeout();
 
 public:
     RestRequest();
@@ -37,10 +39,12 @@ private slots:
 private:
     void updateCookies(QNetworkReply *reply);
     void clearFinishedReplies();
+    void clearFinishedTimers();
 
 private:
-    const QByteArray csrf_ospos_v3 = "f422fcc283ce95334506eb40fa3628d8";
+    static QByteArray csrf_ospos_v3;
     QLinkedList<QNetworkReply*> replyList;
+    QLinkedList<QTimer*> timerList;
     static QMap<QString, QNetworkCookie> cookies;
     static QMutex cookieMutex;
     static bool m_sessionTimeout;

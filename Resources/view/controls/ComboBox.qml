@@ -52,6 +52,7 @@ ComboBox {
         color: control.activeFocus && isInvalid()?"#79ffffff":"#79ff4500"
         font.pixelSize: 11
     }
+    onEnabledChanged: canvas.requestPaint()
     indicator: Canvas {
             id: canvas
             x: control.width - width - control.rightPadding
@@ -71,7 +72,7 @@ ComboBox {
                 context.lineTo(width, 0);
                 context.lineTo(width / 2, height);
                 context.closePath();
-                context.fillStyle = control.activeFocus?"white":"lightslategray";
+                context.fillStyle = !control.enabled?"#c4d5e6":(control.activeFocus?"white":"lightslategray");
                 context.fill();
             }
         }
@@ -104,8 +105,8 @@ ComboBox {
         horizontalAlignment: "AlignLeft"
     }
     background: Rectangle {
-        border.color: isInvalid()?"salmon":(control.activeFocus?"mediumturquoise":"lightslategray")
+        border.color: !control.enabled?"#c4d5e6":(isInvalid()?"salmon":(control.activeFocus?"mediumturquoise":"lightslategray"))
         border.width: 1
-        color: control.activeFocus ?(isInvalid()?"salmon":"mediumturquoise"): "#f7f8f9"
+        color: !control.enabled?"white":(control.activeFocus ?(isInvalid()?"salmon":"mediumturquoise"): "#f7f8f9")
     }
 }

@@ -1,30 +1,67 @@
 import QtQuick 2.7
 import QtQuick.Controls 2.0
 import QtQuick.Dialogs 1.2
+import QtMultimedia 5.9
 import posapp.restrequest 1.0
 import "../../fonts"
 import "../controls"
+import "../popups"
+import "../helpers/helper.js" as Helper
 
 Page {
     id: paymentPage
     width:  800 //parent
-    height:  440 //parent
-
+    height:  430 //parent
     title: qsTr("Ödeme")
+    property int busyIndicatorCnt: 0
 
     RestRequest {
-        id:pageLoadRequest
+        id:paymentRequest
 
         onSessionTimeout: {
             paymentPage.parent.pop();
         }
+
+        onRequestTimeout: {
+            paymentPage.parent.pop();
+        }
+
+        onStart: {busyIndicatorCnt++; busyIndicator.running = true}
+        onEnd: {if (--busyIndicatorCnt == 0)busyIndicator.running = false}
+    }
+
+    SoundEffect {
+        id: removeFromPaymentSound
+        source: "../../sounds/delete.wav"
+    }
+
+    SoundEffect {
+        id: doPaymentSound
+        source: "../../sounds/payment.wav"
+    }
+
+    SoundEffect {
+        id: customerSelectedSound
+        source: "../../sounds/customer_selected.wav"
+    }
+
+    SoundEffect {
+        id: customerUnselectedSound
+        source: "../../sounds/customer_removed.wav"
+    }
+
+    SoundEffect {
+        id: switchSound
+        source: "../../sounds/switch.wav"
     }
 
     ReceiptPopup {
         id: receiptPopup
         onVisibleChanged: {
-            if (!visible)
+            if (!visible) {
+                popData = "complete";
                 paymentPage.parent.pop();
+            }
         }
     }
 
@@ -32,14 +69,19 @@ Page {
         id: toast
     }
 
+    DialogPopup {
+        id: dialogPopup
+    }
+
     Component.onCompleted: {
-        pageLoadRequest.get("sales/json", function(code, jsonStr){updateData(JSON.parse(jsonStr))});
+        paymentRequest.get("sales/json", function(code, jsonStr){updateData(JSON.parse(jsonStr))});
     }
 
     function updateData(data) {
-        paymentTextField.text = parseFloat(data["amount_due"]).toFixed(2);
-        remainCost.text = paymentTextField.text + "₺";
-        custSelectButton.text = data.customer?data.customer:"Müşteri Seçilmedi";
+        paymentTextField.text = parseFloat(data["amount_due"]).toFixed(2).replace('.', ',');
+        remainCost.text = Helper.toCurrency(data["amount_due"]);
+        customerText.text = data.customer?data.customer:"Müşteri Seç";
+        selectCustomerPopup.selectedCustomerId = data.customer_id?parseInt(data.customer_id): -1;
         paymentListViewModel.clear();
 
         finishButton.enabled = false;
@@ -52,213 +94,43 @@ Page {
             typeButton.enabled = false;
         }
 
-        paymentListViewModel.append({editable: false, type: "Ara Toplam", cost: parseFloat(data["subtotal"]).toFixed(2) + "₺"});
+        paymentListViewModel.append({editable: false, type: "Ara Toplam", cost: Helper.toCurrency(data["subtotal"])});
         var taxes_keys = Object.keys(data["taxes"]);
         for (var cnt=0; cnt < taxes_keys.length; cnt++) {
             var tax = data["taxes"][taxes_keys[cnt]];
-            paymentListViewModel.append({editable: false, type: tax.tax_group, cost: parseFloat(tax.sale_tax_amount).toFixed(2) + "₺"});
+            paymentListViewModel.append({editable: false, type: tax.tax_group, cost: Helper.toCurrency(tax.sale_tax_amount)});
         }
 
-        paymentListViewModel.append({editable: false, type: "Toplam", cost: parseFloat(data["total"]).toFixed(2) + "₺"});
+        paymentListViewModel.append({editable: false, type: "Toplam", cost: Helper.toCurrency(data["total"])});
 
         var payment_keys = Object.keys(data["payments"]);
         for (cnt=0; cnt < payment_keys.length; cnt++) {
             var payment = data["payments"][payment_keys[cnt]];
-            paymentListViewModel.append({editable: true, type: payment.payment_type, cost: parseFloat(payment.payment_amount).toFixed(2) + "₺"});
+            paymentListViewModel.append({editable: true, type: payment.payment_type.replace('+', ' '), cost: Helper.toCurrency(payment.payment_amount)});
         }
+
+        paymentTextField.forceActiveFocus();
+        printEnabledSign.visible = data.print_after_sale === "1";
+
+        typeModel.clear();
+        typeModel.append({name: "Nakit"});
+        typeModel.append({name: "Kredi Kartı"});
+        if (selectCustomerPopup.selectedCustomerId > 0)
+            typeModel.append({name: "Veresiye"});
+        typeButton.currentIndex = 0;
     }
 
-    function searchCustomer() {
-        customerNameTextField.customerNameTextCleared = true;
-        customerNameTextField.text = customerNameTextField.text.trim();
-        pageLoadRequest.get("customers/search?search="+encodeURIComponent(customerNameTextField.text)+
-                            "&order=asc&offset=0&limit=25", function(code, jsonStr){
-            var customerList = JSON.parse(jsonStr)["rows"];
-            customerListViewModel.clear();
-            for (var cnt=0; cnt < customerList.length; ++cnt){
-                var suspended = customerList[cnt];
-                customerListViewModel.append({
-                    num: customerList[cnt]["people.person_id"],
-                    name: customerList[cnt]["first_name"] + " " + customerList[cnt]["last_name"],
-                    amount:customerList[cnt]["total"]
-                });
-            }
-        });
-    }
-
-    Popup{
+    SelectCustomerPopup {
         id: selectCustomerPopup
-
-        width: parent.width * 0.75
-        height: parent.height * 0.75
-        x: parent.width * 0.125
-        y: parent.height * 0.125
-        modal: true
-        focus: true
-        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
-
-        Rectangle{
-            id: selectCustomerTitle
-            width: parent.width
-            height: 40
-            Text {
-                text: "Müşteri Seç"
-                color: "#545454"
-                font.pixelSize: 20
-                font.family: Fonts.fontBlackOpsOneRegular.name
-                anchors.left: parent.left
-                width: parent.width/2
-                anchors.verticalCenter: parent.verticalCenter
-            }
-            TextField {
-                id: customerNameTextField
-                x: 400
-                font.pixelSize: 20
-                activeFocusOnTab: true
-                focus: true
-                anchors.right: parent.right
-                anchors.top: parent.top
-                anchors.leftMargin: 4
-                leftPadding: 10
-                topPadding: 2
-                anchors.topMargin: 2
-                width: parent.width / 2
-                height: parent.height
-                font.family: Fonts.fontTekoRegular.name
-                placeholderText: "İsim veya Soyisim"
-                background: Rectangle {
-                    border.color: parent.activeFocus?"dodgerblue":"slategray"
-                    border.width: 2
-                    color: parent.activeFocus ?"dodgerblue": "white"
-                }
-                property bool customerNameTextCleared: false
-                onTextChanged: {
-                    if (customerNameTextCleared)
-                        customerNameTextCleared = false;
-                    else {
-                        searchCustomer();
-                    }
-                }
-                color: activeFocus ? "white": "slategray"
-                anchors.rightMargin: 0
-            }
-        }
-        FocusScope {
-            id: selectCustomerList
-            anchors.left: parent.Left
-            width: parent.width
-            anchors.top: selectCustomerTitle.bottom
-            anchors.topMargin: 10
-            height: parent.height - selectCustomerTitle.height - 10
-            activeFocusOnTab: true
-            z: 1000
-
-            clip: true
-
-            Rectangle {
-                width: parent.width
-                height: parent.height
-                color: "white"
-                border.color: "dodgerblue"
-                border.width: 2
-            }
-
-            ListView {
-                id: selectCustomerListView
-                width: parent.width; height: parent.height
-                focus: true
-                model: ListModel{
-                    id: customerListViewModel
-                }
-                cacheBuffer: 200
-                delegate: Item {
-                    id: selectCustomerItemContainer
-                    width: ListView.view.width; height: 35; anchors.leftMargin: 4; anchors.rightMargin: 4
-                    Rectangle {
-                        id: selectCustomerItemContent
-                        anchors.centerIn: parent; width: selectCustomerItemContainer.width - 20; height: selectCustomerItemContainer.height
-                        antialiasing: true
-                        color: "transparent"
-                        Rectangle {
-                            anchors.fill: parent;
-                            antialiasing: true;
-                            color:"transparent"
-                            Text {
-                                id: selectCustomerItemNum
-                                text: num
-                                color: "#545454"
-                                font.pixelSize: 18
-                                font.family: Fonts.fontRubikRegular.name
-                                width: parent.width / 3
-                                anchors.left: parent.left
-                                verticalAlignment: Text.AlignVCenter
-                                height: parent.height
-                            }
-
-                            Text {
-                                id: selectCustomerItemName
-                                text: name
-                                color: "#545454"
-                                font.pixelSize: 18
-                                font.family: Fonts.fontPlayRegular.name
-                                anchors.left: selectCustomerItemNum.right
-                                width: parent.width / 3
-                                verticalAlignment: Text.AlignVCenter
-                                height: parent.height
-                            }
-
-                            Text {
-                                id: selectCustomerItemDebtAmount
-                                text: amount
-                                color: "#545454"
-                                font.pixelSize: 18
-                                font.family: Fonts.fontIBMPlexMonoRegular.name
-                                anchors.right: parent.right
-                                horizontalAlignment: Text.AlignRight
-                                width: parent.width/3
-                                verticalAlignment: Text.AlignVCenter
-                                height: parent.height
-                            }
-                        }
-                    }
-
-                    MouseArea {
-                        anchors.fill: parent
-                        hoverEnabled: true
-
-                        onClicked: {
-                            selectCustomerItemContainer.forceActiveFocus()
-                            selectCustomerItemContainer.ListView.view.currentIndex = index
-                        }
-
-                        onDoubleClicked: {
-                            selectCustomerItemContainer.ListView.view.currentIndex = index;
-                            selectCustomerItemContainer.forceActiveFocus();
-                            pageLoadRequest.post("sales/select_customer/json",{customer: customerListViewModel.get(index).num},
-                                                 function(code, jsonStr){
-                                                    updateData(JSON.parse(jsonStr));
-                                                    selectCustomerPopup.close();
-                                                 });
-
-                        }
-                    }
-
-                    states: State {
-                        name: "active"; when: selectCustomerItemContainer.activeFocus
-                        PropertyChanges { target: selectCustomerItemContainer; height: 38}
-                        PropertyChanges { target: selectCustomerItemContent; color: "dodgerblue"; height: 38; width: selectCustomerItemContainer.width - 10; anchors.leftMargin: 10; anchors.rightMargin: 10}
-                        PropertyChanges { target: selectCustomerItemNum; font.pixelSize: 22; font.bold: true; color: "white" }
-                        PropertyChanges { target: selectCustomerItemName; font.pixelSize: 22; font.bold: true; color: "white" }
-                        PropertyChanges { target: selectCustomerItemDebtAmount; font.pixelSize: 24; font.bold: true; color: "white"; font.family: Fonts.fontIBMPlexMonoSemiBold.name }
-                    }
-                }
-                ScrollBar.vertical: ScrollBar {
-                    policy: ScrollBar.AlwaysOn
-                }
-
-                Behavior on y {
-                    NumberAnimation { duration: 600; easing.type: Easing.OutQuint }
-                }
+        onClosed: {
+            if (closeReason == "session_timeout")
+                salePage.parent.pop();
+            else if (closeReason != "ordinary"){
+                paymentRequest.post("sales/select_customer/json",{customer: closeReason},
+                                  function(code, jsonStr){
+                                      customerSelectedSound.play();
+                                      updateData(JSON.parse(jsonStr));
+                                  });
             }
         }
     }
@@ -271,65 +143,54 @@ Page {
         anchors.leftMargin: 4
         placeholderText: "Ödeme Türü"
         model:ListModel{
-            ListElement{name: "Nakit"}
-            ListElement{name: "Kredi Kartı"}
-            ListElement{name: "Veresiye"}
+            id: typeModel
         }
         height: 50
         font.pixelSize: 24
         width: 150
+        onCurrentIndexChanged: {
+            addPaymentButton.text = currentIndex === 2?"Veresiye Ekle": "Ödeme Ekle";
+        }
     }
 
     TextField {
         id: paymentTextField
-        font.pixelSize: 20
-        activeFocusOnTab: true
-        focus: true
         anchors.left: typeButton.right
         anchors.top: custSelectButton.bottom
         anchors.leftMargin: 4
         anchors.topMargin: 4
-        topPadding: 8
         width: parent.width - 316
         height: 50
         font.family: Fonts.fontOrbitronRegular.name
-        verticalAlignment: "AlignVCenter"
+        font.pixelSize: 20
         z:98
         placeholderText: "Ödenen Tutar"
-        background: Rectangle {
-            border.color: !enabled?"gainsboro":(parent.activeFocus?"dodgerblue":"slategray")
-            border.width: 2
-            color: parent.activeFocus ?"dodgerblue": "white"
-        }
-        color: !enabled?"gainsboro":(activeFocus ? "white": "slategray")
-        leftPadding: 10
         validator: DoubleValidator {bottom: 0; top: 100000}
         Keys.onReturnPressed: {
-            pageLoadRequest.post("sales/add_payment/json",{payment_type: typeButton.currentText.replace(' ', '+'), amount_tendered: paymentTextField.text},
-                                 function(code, jsonStr) {
-                                    updateData(JSON.parse(jsonStr));
-                                 });
+            paymentRequest.post("sales/add_payment/json",{payment_type: typeButton.currentText.replace(' ', '+'), amount_tendered: paymentTextField.text},
+                              function(code, jsonStr) {
+                                  updateData(JSON.parse(jsonStr));
+                              });
         }
 
         Button {
             id:addPaymentButton
             anchors.right: parent.right
             anchors.top: parent.top
-            anchors.topMargin: 6
-            anchors.rightMargin: 6
             text: "Ödeme Ekle"
-            height: 38
-            width: 100
-            font.pixelSize: 14
+            height: parent.height
+            width: 120
+            font.pixelSize: 20
             z:100
             Keys.onReturnPressed: {
                 clicked();
             }
             onClicked: {
-                pageLoadRequest.post("sales/add_payment/json",{payment_type: typeButton.currentText.replace(' ', '+'), amount_tendered: paymentTextField.text},
-                                     function(code, jsonStr) {
-                                        updateData(JSON.parse(jsonStr));
-                                     });
+                paymentRequest.post("sales/add_payment/json",{payment_type: typeButton.currentText.replace(' ', '+'), amount_tendered: paymentTextField.text},
+                                  function(code, jsonStr) {
+                                      doPaymentSound.play();
+                                      updateData(JSON.parse(jsonStr));
+                                  });
             }
             borderColor:"salmon"
         }
@@ -338,11 +199,33 @@ Page {
     Button{
         id:custSelectButton
         width: parent.width
-        height: 25
-        font.pixelSize: 18
+        anchors.margins: 0
+        height: 40
+        font.pixelSize: 24
         onClicked: {
-            searchCustomer();
             selectCustomerPopup.open();
+        }
+
+        Text {
+            id: customerText
+            font: parent.font
+            color: parent.pressed?"white":parent.borderColor
+            horizontalAlignment: Text.AlignHCenter
+            verticalAlignment: Text.AlignVCenter
+            elide: Text.ElideRight
+            anchors.centerIn: parent
+        }
+
+        Button {
+            visible: customerText.text != "Müşteri Seç" && customerText.text.length > 0
+            anchors.left: customerText.right
+            anchors.leftMargin: 4
+            text: "Kaldır"
+            borderColor: "indianred"
+            height: parent.height
+            onClicked: {
+                paymentRequest.get("sales/remove_customer/json", function(code, jsonStr){customerUnselectedSound.play();updateData(JSON.parse(jsonStr))});
+            }
         }
     }
 
@@ -357,11 +240,12 @@ Page {
         width: 150
         font.pixelSize: 24
         onClicked: {
-            pageLoadRequest.post("sales/suspend/json",{},
-                                 function(code, jsonStr){
-                                    updateData(JSON.parse(jsonStr));
-                                    paymentPage.parent.pop();
-                                 });
+            paymentRequest.post("sales/suspend/json",{},
+                              function(code, jsonStr){
+                                  //updateData(JSON.parse(jsonStr));
+                                  popData = "suspend";
+                                  paymentPage.parent.pop();
+                              });
         }
     }
 
@@ -407,63 +291,57 @@ Page {
                     antialiasing: true
                     radius: enabled?4:0
                     z: 99
-                    Rectangle {
-                        anchors.fill: parent;
-                        anchors.margins: 3;
-                        antialiasing: true;
-                        z: 99
-                        color: "transparent"
-                        Button {
-                            id:deleteButton
-                            width: 80
-                            anchors.left: parent.left
-                            anchors.top: parent.top
-                            anchors.topMargin: 4
-                            anchors.leftMargin: 40
-                            visible: false
-                            text: "Sil"
-                            height: label1.height
-                            font.pixelSize: 14
-                            z:100
-                            MouseArea{
-                                anchors.fill: parent
-                                onClicked: {
-                                    mouse.accepted = true;
-                                    pageLoadRequest.get("sales/delete_payment/" + encodeURIComponent(typeButton.currentText) + "/json",
-                                                    function(code, jsonStr){
-                                                        updateData(JSON.parse(jsonStr));
-                                                    });
-                                }
+                    Button {
+                        id:deleteButton
+                        width: 80
+                        anchors.left: parent.left
+                        anchors.top: parent.top
+                        anchors.bottom: parent.bottom
+                        anchors.topMargin: 4
+                        anchors.bottomMargin: 4
+                        anchors.leftMargin: 40
+                        visible: false
+                        text: "Sil"
+                        font.pixelSize: 14
+                        z:100
+                        MouseArea{
+                            anchors.fill: parent
+                            onClicked: {
+                                paymentRequest.get("sales/delete_payment/" + encodeURIComponent(type.replace(' ', '+')) + "/json",
+                                                 function(code, jsonStr){
+                                                     removeFromPaymentSound.play();
+                                                     updateData(JSON.parse(jsonStr));
+                                                 });
                             }
-
-                            borderColor:"indianred"
                         }
 
-                        Text {
-                            id: label1
-                            text: type
-                            color: "#545454"
-                            font.pixelSize: enabled?20: 16
-                            font.family: enabled?Fonts.fontRubikRegular.name: Fonts.fontTomorrowRegular.name
-                            width: parent.width * 0.75 - 160
-                            anchors.left: deleteButton.right
-                            anchors.leftMargin: enabled?40:50
-                            anchors.top: parent.top
-                            anchors.topMargin: enabled?4:0
-                        }
+                        borderColor:"indianred"
+                    }
 
-                        Text {
-                            id: label3
-                            horizontalAlignment: Text.AlignRight
-                            anchors.rightMargin: enabled?4:14
-                            anchors.right : parent.right
-                            text: cost
-                            color: "#545454"
-                            font.pixelSize: enabled?24:20
-                            font.family: Fonts.fontIBMPlexMonoRegular.name
-                            width: parent.width * 0.25
-                            anchors.top: parent.top
-                        }
+                    Text {
+                        id: label1
+                        text: type
+                        color: "#545454"
+                        font.pixelSize: enabled?20: 16
+                        font.family: enabled?Fonts.fontRubikRegular.name: Fonts.fontTomorrowRegular.name
+                        width: parent.width * 0.75 - 160
+                        anchors.left: deleteButton.right
+                        anchors.leftMargin: enabled?40:50
+                        anchors.top: parent.top
+                        anchors.topMargin: enabled?4:0
+                    }
+
+                    Text {
+                        id: label3
+                        horizontalAlignment: Text.AlignRight
+                        anchors.rightMargin: enabled?4:14
+                        anchors.right : parent.right
+                        text: cost
+                        color: "#545454"
+                        font.pixelSize: enabled?24:20
+                        font.family: Fonts.fontIBMPlexMonoRegular.name
+                        width: parent.width * 0.25
+                        anchors.top: parent.top
                     }
                 }
 
@@ -551,12 +429,16 @@ Page {
         width: 150
         font.pixelSize: 24
         Keys.onReturnPressed: {
-            pageLoadRequest.post("sales/cancel/json",{},
-                                 function(code, jsonStr) {
-                                    updateData(JSON.parse(jsonStr));
-                                     yesNoDialog.close();
-                                     paymentPage.parent.pop();
-                                 });
+            clicked();
+        }
+        onClicked: {
+            dialogPopup.confirmation("İptal Et", "İptal işlemini onayladığınızda bu satışa ait tüm bilgiler silinecek.", function(){
+                paymentRequest.post("sales/cancel/json",{},
+                              function(code, jsonStr) {
+                                  popData = "cancel";
+                                  paymentPage.parent.pop();
+                              });
+                });
         }
         borderColor:"indianred"
     }
@@ -576,19 +458,55 @@ Page {
         }
 
         onClicked: {
-            pageLoadRequest.post("sales/complete/json",
-                                 function(code, jsonStr) {
-                                     var data = JSON.parse(jsonStr);
-                                     if (data.sale_id_num > 0){
-                                         receiptPopup.getReceipt("sales", data.sale_id_num);
-                                         toast.showSuccess("İşlem Tamamlandı!", 3000);
-                                     }
-                                     else {
-                                        toast.showError("İşlem tamamlanırken bir sorun meydana geldi!", 3000);
-                                     }
-                                 });
+            paymentRequest.post("sales/complete/json",
+                              function(code, jsonStr) {
+                                  var data = JSON.parse(jsonStr);
+                                  if (data.sale_id_num > 0){
+                                      receiptPopup.getReceipt("sales", data.sale_id_num, printEnabledSign.visible);
+                                      toast.showSuccess("İşlem Tamamlandı!", 3000);
+                                  }
+                                  else {
+                                      toast.showError("İşlem tamamlanırken bir sorun meydana geldi!", 3000);
+                                  }
+                              });
         }
         borderColor:"mediumseagreen"
     }
+    Button {
+        id: printOption
+        anchors.right: finishButton.left
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: 4
+        anchors.rightMargin: 4
+        width: 50
+        height: 50
+        font.family: Fonts.fontAwesomeSolid.name
+        font.pixelSize: 30
+        text: "\uF543"
+        onClicked: {
+            paymentRequest.post("sales/set_print_after_sale", {sales_print_after_sale: !printEnabledSign.visible},
+                              function(code, jsonStr) {
+                                  if (code === "200") {
+                                      switchSound.play();
+                                      printEnabledSign.visible = !printEnabledSign.visible;
+                                      //toast.showSuccess("Yazdırma seçeneği değiştirildi!", 3000);
+                                  } else
+                                      toast.showError("Yazdırma seçeneği değiştirilemedi!", 3000);
+                              });
+        }
 
+        Text {
+            id: printEnabledSign
+            z:100
+            text: "\uF058"
+            font.family: Fonts.fontAwesomeSolid.name
+            font.pixelSize: 16
+            anchors.right: parent.right
+            anchors.top: parent.top
+            anchors.topMargin: 2
+            anchors.rightMargin: 2
+            color: "dodgerblue"
+            visible: true
+        }
+    }
 }

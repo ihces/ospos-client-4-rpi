@@ -4,11 +4,13 @@ import QtQuick.Dialogs 1.2
 import posapp.restrequest 1.0
 import "../../fonts"
 import "../controls"
+import "../popups"
+import "../helpers/helper.js" as Helper
 
 Page {
     id: itemsPage
     width:  800
-    height:  440
+    height:  430
     font.family: "Courier"
 
     title: qsTr("Ürünler")
@@ -16,11 +18,17 @@ Page {
     property bool categoryListUpdating: false
     property int busyIndicatorCnt: 0
     property int selectedItemId: -1;
-    property variant stockIds: []
+    property int receivingQuantity
+    property int reorderLevel
+    property variant stocks
     RestRequest {
         id:itemsRequest
 
         onSessionTimeout: {
+            itemsPage.parent.pop();
+        }
+
+        onRequestTimeout: {
             itemsPage.parent.pop();
         }
 
@@ -32,17 +40,8 @@ Page {
         id: toast
     }
 
-    MessageDialog {
-        id: deleteDialog
-        title: "Ürün Silme"
-        text: "Seçili ürünü silmek istediğinizden emin misiniz?"
-        icon: StandardIcon.Question
-        standardButtons: StandardButton.Yes | StandardButton.No
-        onYes: {
-            editDelete.visible = false;
-            deleteItem();
-        }
-        onNo: deleteDialog.visible = false
+    DialogPopup {
+        id: dialogPopup
     }
 
     function getItems() {
@@ -79,6 +78,8 @@ Page {
                 list1.forceActiveFocus();
             }
         }
+
+        searchTextField.forceActiveFocus();
     }
 
     function openEditDelete(itemId) {
@@ -119,7 +120,14 @@ Page {
         categoryComboBox.editText = data.item_info.category;
         unitPriceTextField.text = data.item_info.unit_price.replace('.', ',');
         costPriceTextField.text = data.item_info.cost_price.replace('.', ',');
-        stockIds = Object.keys(data.stock_locations);
+        var stockIds = Object.keys(data.stock_locations);
+        stocks = [];
+        for (var cnt = 0; cnt < stockIds.length; ++cnt)
+            stocks.push({id: stockIds[cnt], quantity: parseInt(data.stock_locations[stockIds[cnt]].quantity)});
+
+        receivingQuantity = parseInt(data.item_info.receiving_quantity);
+        reorderLevel = parseInt(data.item_info.reorder_level);
+
         if (data.item_tax_info.length > 0) {
             tax1NameTextField.text = data.item_tax_info[0].name;
             tax1ValueTextField.text = parseInt(data.item_tax_info[0].percent);
@@ -143,7 +151,7 @@ Page {
 
         var supplier_ids = Object.keys(data.suppliers);
         supplierComboBoxListModel.clear();
-        for (var cnt = 0; cnt < supplier_ids.length; ++cnt) {
+        for (cnt = 0; cnt < supplier_ids.length; ++cnt) {
             if (supplier_ids[cnt].length > 0)
                 supplierComboBoxListModel.append({id: supplier_ids[cnt], name: data.suppliers[supplier_ids[cnt]]});
 
@@ -159,16 +167,6 @@ Page {
         costPriceTextField.needValidate = false;
     }
 
-    function anyDescendantHasActiveFocus(ancestor) {
-        let item = appWindow.activeFocusItem;
-        while (item) {
-            if (item === ancestor)
-                return true;
-            item = item.parent;
-        }
-        return false;
-    }
-
     function saveItem() {
         var item = {
             item_number: itemNumberTextField.text.trim(),
@@ -180,10 +178,10 @@ Page {
             unit_price:unitPriceTextField.text.replace('.', ''),
             tax_names: [tax1NameTextField.text.trim(), tax2NameTextField.text.trim()],
             tax_percents: [tax1ValueTextField.text, tax2ValueTextField.text],
-            receiving_quantity: 1, reorder_level: 1, item_image:""};
+            receiving_quantity: receivingQuantity, reorder_level: reorderLevel, item_image:""};
 
-        for (var i=0; i < stockIds.length; ++i)
-            item["quantity_" + stockIds[i]] = 0;
+        for (var i=0; i < stocks.length; ++i)
+            item["quantity_" + stocks[i].id] = stocks[i].quantity;
 
         itemsRequest.post('items/save/' + selectedItemId, item, function(code, jsonStr){
             var response = JSON.parse(jsonStr);
@@ -293,7 +291,7 @@ Page {
             model: ListModel{id: itemListViewModel}
             cacheBuffer: 200
             onActiveFocusChanged: {
-                if (!activeFocus && !anyDescendantHasActiveFocus(editDelete))
+                if (!activeFocus && !Helper.anyDescendantHasActiveFocus(editDelete))
                     editDelete.visible = false;
             }
             onCurrentIndexChanged: {
@@ -310,23 +308,23 @@ Page {
                     color: "transparent"
                     antialiasing: true
                     radius: 4
-                        ListViewColumnLabel{
-                            text: "Barkod"
-                            labelOf: itemNumText
-                        }
-                        Text {
-                            id: itemNumText
-                            text: num
-                            color: "#545454"
-                            font.pixelSize: 18
-                            horizontalAlignment: Text.AlignHCenter
-                            verticalAlignment: Text.AlignVCenter
-                            font.family: Fonts.fontRubikRegular.name
-                            width: parent.width * (3/8)
-                            anchors.left: parent.left
-                            anchors.top: parent.top
-                            anchors.bottom: parent.bottom
-                        }
+                    ListViewColumnLabel{
+                        text: "Barkod"
+                        labelOf: itemNumText
+                    }
+                    Text {
+                        id: itemNumText
+                        text: num
+                        color: "#545454"
+                        font.pixelSize: 18
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                        font.family: Fonts.fontRubikRegular.name
+                        width: parent.width * (3/8)
+                        anchors.left: parent.left
+                        anchors.top: parent.top
+                        anchors.bottom: parent.bottom
+                    }
                         ListViewColumnLabel{
                             text: "Ürün Adı"
                             labelOf: nameText
@@ -376,7 +374,7 @@ Page {
                     }
                     onDoubleClicked: {
                         if (selectFilter.currentIndex != 3)
-                            itemsPage.parent.push('Item.qml', {item_id: itemListViewModel.get(index).id})
+                            itemsPage.parent.push('Item.qml', {item_id: itemListViewModel.get(index).id, unitPrice: itemListViewModel.get(index).unitPrice})
                     }
                 }
 
@@ -468,7 +466,7 @@ Page {
             width: parent.width / 3 - 5.33
             height: 40
             model: ListModel { id: supplierComboBoxListModel }
-            placeholderText: "Sağlayıcı"
+            placeholderText: "Tedarikçi"
         }
 
         TextField {
@@ -571,7 +569,7 @@ Page {
             font.pixelSize: 24
             font.family: Fonts.fontBarlowRegular.name
             onClicked: {
-                deleteDialog.visible=true;
+                dialogPopup.confirmation("Ürün Silme", "Seçili ürünü silmek istediğinizden emin misiniz?", function () {deleteItem()});
             }
         }
 
@@ -587,6 +585,10 @@ Page {
             font.pixelSize: 24
             borderColor: "mediumseagreen"
             onClicked: {
+                if (itemNumberTextField.text.trim() === "0000000000000") {
+                    toast.showError("Barkod numarası sıfır olamaz.");
+                }
+
                 nameTextField.needValidate = true;
                 categoryComboBox.needValidate = true;
                 unitPriceTextField.needValidate = true;
@@ -595,7 +597,17 @@ Page {
                 if(nameTextField.isInvalid() || categoryComboBox.isInvalid() || unitPriceTextField.isInvalid() || costPriceTextField.isInvalid())
                     toast.showError("Kırmızı Alanlar Boş Bırakılamaz!", 3000);
                 else
-                    saveItem();
+                {
+                    itemsRequest.post('items/check_item_number', {item_number: itemNumberTextField.text.trim(), item_id: selectedItemId}, function(code, jsonStr){
+                        var response = JSON.parse(jsonStr);
+                        if (response === true)
+                            saveItem();
+                        else
+                            toast.showError("Bu barkod numarası ile başka bir ürün sistemde mevcut!", 3000);
+                    });
+
+
+                }
             }
         }
     }

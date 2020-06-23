@@ -6,20 +6,21 @@ import "../../fonts"
 Page {
     id: homePage
     width:  800 //parent
-    height:  440 //parent
+    height:  380 //parent
 
     title: qsTr("Giriş")
 
     FocusScope {
         id: listMenu
         width: parent.width
-        height: parent.height
+        anchors.top: parent.top
+        anchors.bottom: parent.bottom
         activeFocusOnTab: true
 
         clip: true
         ListView {
             id: list1
-            width: parent.width; height: 180
+            width: parent.width * 0.9; height: 180
             anchors.centerIn: parent
             orientation: ListView.Horizontal
             focus: true
@@ -32,7 +33,7 @@ Page {
              ListElement{
                 icon: "\uF472"
                 name: "Alım"
-                page: "Sale.qml"
+                page: "Receive.qml"
              }
              ListElement{
                 icon: "\uF02C"
@@ -43,7 +44,7 @@ Page {
                 icon: "\uF2B9"
                 name: "Hesaplar"
                 page: "Accounts.qml"
-             }
+             }/*
              ListElement{
                 icon: "\uF200"
                 name: "Rapor"
@@ -53,12 +54,12 @@ Page {
                 icon: "\uF013"
                 name: "Ayarlar"
                 page: "Sale.qml"
-             }
+             }*/
             }
             cacheBuffer: 200
             delegate: Item {
                 id: container
-                width: 130
+                width: 180
                 height: 180
 
                 Rectangle {
@@ -66,14 +67,14 @@ Page {
                     anchors.centerIn: parent
                     width: container.width - 20
                     height: container.height - 10
-                    color:"#545454"
+                    color:"#c4d5e6"
                     antialiasing: true
                     radius: 4
 
                     Rectangle {
                         id: innerContent
                         anchors.fill: parent;
-                        anchors.margins: 3;
+                        anchors.margins: 1;
                         antialiasing: true;
                         color: "white"
 
@@ -81,7 +82,7 @@ Page {
                             id: label1
                             text: icon
                             color: "#545454"
-                            font.pixelSize: 48
+                            font.pixelSize: 64
                             font.family: Fonts.fontAwesomeSolid.name
                             anchors.centerIn: parent
                         }
@@ -115,14 +116,14 @@ Page {
 
                 states: State {
                     name: "active"; when: container.activeFocus
-                    PropertyChanges { target: content; color: "dodgerblue"; width: container.width - 10; anchors.leftMargin: 10; anchors.rightMargin: 10 }
-                    PropertyChanges { target: innerContent; color: "dodgerblue"}
-                    PropertyChanges { target: label1; font.pixelSize: 52; color: "white" }
-                    PropertyChanges { target: label2; font.pixelSize: 24; font.bold: true; color: "white" }
+                    PropertyChanges { target: content; color: "mediumturquoise"; width: container.width - 10; anchors.leftMargin: 10; anchors.rightMargin: 10 }
+                    PropertyChanges { target: innerContent; color: "mediumturquoise"}
+                    PropertyChanges { target: label1; font.pixelSize: 72; color: "white" }
+                    PropertyChanges { target: label2; font.pixelSize: 22; font.bold: true; color: "white" }
                 }
             }
             ScrollBar.vertical: ScrollBar {
-                policy: ScrollBar.AlwaysOn
+                policy: ScrollBar.AlwaysOff
             }
 
             Behavior on y {
@@ -131,3 +132,9 @@ Page {
         }
     }
 }
+
+/*##^##
+Designer {
+    D{i:0;formeditorZoom:0.8999999761581421}
+}
+##^##*/

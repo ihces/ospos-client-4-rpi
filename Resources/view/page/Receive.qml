@@ -9,21 +9,21 @@ import "../popups"
 import "../helpers/helper.js" as Helper
 
 Page {
-    id: salePage
+    id: receivePage
     width:  800
     height:  430
-    title: qsTr("Satış")
+    title: qsTr("Alım")
 
     property int busyIndicatorCnt: 0
     property bool itemAdded2Cart: false
 
     Component.onCompleted: {
-        salesRequest.get("sales/json", function(code, jsonStr){updateData(JSON.parse(jsonStr))});
+        receiveRequest.get("receivings/json", function(code, jsonStr){updateData(JSON.parse(jsonStr))});
     }
 
     onVisibleChanged: {
         if (visible) {
-            salesRequest.get("sales/json", function(code, jsonStr){updateData(JSON.parse(jsonStr));});
+            receiveRequest.get("receivings/json", function(code, jsonStr){updateData(JSON.parse(jsonStr))});
         }
     }
 
@@ -48,18 +48,8 @@ Page {
     }
 
     SoundEffect {
-        id: unsuspendSound
-        source: "../../sounds/unsuspend.wav"
-    }
-
-    SoundEffect {
         id: modeChangedSound
         source: "../../sounds/mode_changed.wav"
-    }
-
-    SoundEffect {
-        id: suspendSound
-        source: "../../sounds/suspend.wav"
     }
 
     SoundEffect {
@@ -73,6 +63,11 @@ Page {
     }
 
     SoundEffect {
+        id: doPaymentSound
+        source: "../../sounds/payment.wav"
+    }
+
+    SoundEffect {
         id: increaseItemAmtSound
         source: "../../sounds/item_increase.wav"
     }
@@ -82,15 +77,37 @@ Page {
         source: "../../sounds/item_decrease.wav"
     }
 
+    SoundEffect {
+        id: switchSound
+        source: "../../sounds/switch.wav"
+    }
+
+    ReceiptPopup {
+        id: receiptPopup
+        onVisibleChanged: {
+            if (!visible) {
+                receiveRequest.get("receivings/json", function(code, jsonStr){updateData(JSON.parse(jsonStr))});
+            }
+        }
+    }
+
+    ToastManager {
+        id: toast
+    }
+
+    DialogPopup {
+        id: dialogPopup
+    }
+
     RestRequest {
-        id:salesRequest
+        id:receiveRequest
 
         onSessionTimeout: {
-            salePage.parent.pop();
+            receivePage.parent.pop();
         }
 
         onRequestTimeout: {
-            salePage.parent.pop();
+            receivePage.parent.pop();
         }
 
         onStart: {busyIndicatorCnt++; busyIndicator.running = true}
@@ -101,35 +118,20 @@ Page {
         id: favoriteItemsPopup
         onClosed: {
             if (closeReason == "session_timeout")
-                salePage.parent.pop();
+                receivePage.parent.pop();
             else if (closeReason != "ordinary"){
                 add2cart(closeReason);
             }
         }
     }
 
-    SuspendedPopup {
-        id: suspendedPopup
+    SelectSupplierPopup {
+        id: selectSupplierPopup
         onClosed: {
             if (closeReason == "session_timeout")
-                salePage.parent.pop();
+                receivePage.parent.pop();
             else if (closeReason != "ordinary"){
-                salesRequest.post("sales/unsuspend/json",{suspended_sale_id: closeReason, submit: "Satışa+Al"},
-                                  function(code, jsonStr){
-                                      unsuspendSound.play();
-                                      updateData(JSON.parse(jsonStr));
-                                  });
-            }
-        }
-    }
-
-    SelectCustomerPopup {
-        id: selectCustomerPopup
-        onClosed: {
-            if (closeReason == "session_timeout")
-                salePage.parent.pop();
-            else if (closeReason != "ordinary"){
-                salesRequest.post("sales/select_customer/json",{customer: closeReason},
+                receiveRequest.post("receivings/select_supplier/json",{supplier: closeReason},
                                   function(code, jsonStr){
                                       customerSelectedSound.play();
                                       updateData(JSON.parse(jsonStr));
@@ -139,7 +141,7 @@ Page {
     }
 
     function add2cart(item_id) {
-        salesRequest.post("sales/add/json", {item: item_id}, function(code, jsonStr){
+        receiveRequest.post("receivings/add/json", {item: item_id}, function(code, jsonStr){
             itemAdded2Cart = true;
             updateData(JSON.parse(jsonStr));
         });
@@ -157,12 +159,11 @@ Page {
         modeSelectComboBox.enabled = false;
         stockSelectComboBox.enabled = false;
 
-        itemNum.text = data["item_count"] + " Ürün Toplam:";
         totalCost.text = Helper.toCurrency(data["total"]);
-        modeSelectComboBox.currentIndex = (data.mode === "sale" ? 0:1);
+        modeSelectComboBox.currentIndex = (data.mode === "receive" ? 0:1);
 
-        customerText.text = data.customer?data.customer:"Müşteri Seç";
-        selectCustomerPopup.selectedCustomerId = data.customer_id?parseInt(data.customer_id): -1;
+        supplierText.text = data.supplier?data.supplier:"Tedarikçi Seç";
+        selectSupplierPopup.selectedSupplierId = data.supplier_id?parseInt(data.supplier_id): -1;
         stockSelectComboBoxModel.clear();
         var location_keys = Object.keys(data.stock_locations);
         for (var cnt = 0; cnt < location_keys.length; ++cnt) {
@@ -170,7 +171,7 @@ Page {
                                                 name: data.stock_locations[location_keys[cnt]],
                                                 stock_id: location_keys[cnt]
                                             });
-            if (data.stock_location === location_keys[cnt]){
+            if (data.stock_source === location_keys[cnt]){
                 stockSelectComboBox.currentIndex = cnt;
             }
         }
@@ -183,39 +184,26 @@ Page {
                                          amount: item.quantity, name: item.name, total: item.total, price: item.price, location: item.item_location});
         }
 
+        itemNum.text = cartListViewModel.count + " Ürün Toplam:";
+
         modeSelectComboBox.enabled = true;
-        stockSelectComboBox.enabled = stockSelectComboBoxModel.count > 0;
+        stockSelectComboBox.enabled = true;
+        clearBarcodeTextField();
+
+        paymentTypeModel.clear();
+        var payment_options = Object.keys(data.payment_options);
+        for (cnt = 0; cnt < payment_options.length; ++cnt)
+            paymentTypeModel.append({name: payment_options[cnt]});
+
+        printEnabledSign.visible = data.print_after_sale === "1";
+
+        paymentTypeSelectComboBox.visible = false;
+        paymentTypeSelectComboBox.currentIndex = -1;
 
         if(itemAdded2Cart) {
             itemAdded2Cart = false;
             add2cartSuccessSound.play();
         }
-        clearBarcodeTextField();
-
-        if (popData.length > 0) {
-            salesRequest.post("sales/change_mode/json",
-                          {
-                              mode:'sale',
-                              stock_location: stockSelectComboBoxModel.get(stockSelectComboBox.currentIndex).stock_id
-                          },
-                          function(code, jsonStr){
-                              modeSelectComboBox.currentIndex = 0;
-                              switch(popData) {
-                              case "complete":
-                                  completeSound.play();
-                                  break;
-                              case "cancel":
-                                  cancelSound.play();
-                                  break;
-                              case "suspend":
-                                  suspendSound.play();
-                                  break;
-                              default:
-                                  break;
-                              }
-                          });
-        }
-        popData = "";
     }
 
     function updateSearchItemList(data) {
@@ -229,23 +217,22 @@ Page {
                                          name: data.rows[cnt]["name"],
                                          code_category: data.rows[cnt]["item_number"] + (data.rows[cnt]["item_number"].length > 0 ? " | ":"") + data.rows[cnt]["category"]});
             }
-
-            itemList.visible = itemListModel.count > 0;
+            itemList.visible = true;
         }
     }
 
     Button{
-        id:custSelectButton
+        id:supplierSelectButton
         width: parent.width
         anchors.margins: 0
         height: 40
         font.pixelSize: 24
         onClicked: {
-            selectCustomerPopup.open();
+            selectSupplierPopup.open();
         }
 
         Text {
-            id: customerText
+            id: supplierText
             font: parent.font
             color: parent.pressed?"white":parent.borderColor
             horizontalAlignment: Text.AlignHCenter
@@ -255,27 +242,27 @@ Page {
         }
 
         Button {
-            visible: customerText.text != "Müşteri Seç" && customerText.text.length > 0
-            anchors.left: customerText.right
+            visible: supplierText.text != "Tedarikçi Seç" && supplierText.text.length > 0
+            anchors.left: supplierText.right
             anchors.leftMargin: 4
             text: "Kaldır"
             borderColor: "indianred"
             height: parent.height
             onClicked: {
-                salesRequest.get("sales/remove_customer/json", function(code, jsonStr){customerUnselectedSound.play();updateData(JSON.parse(jsonStr))});
+                receiveRequest.get("receivings/remove_supplier/json", function(code, jsonStr){customerUnselectedSound.play(); updateData(JSON.parse(jsonStr))});
             }
         }
     }
     ComboBox {
         id: modeSelectComboBox
         anchors.left: parent.left
-        anchors.top: custSelectButton.bottom
+        anchors.top: supplierSelectButton.bottom
         anchors.topMargin: 4
         anchors.leftMargin: 4
         placeholderText: "İşlem Türü"
         model:ListModel{
             id:modeSelectComboBoxModel
-            ListElement{name: "Satış"; mode: "sale"}
+            ListElement{name: "Alım"; mode: "receive"}
             ListElement{name: "İade"; mode: "return"}
         }
         enabled: false
@@ -285,10 +272,10 @@ Page {
 
         onCurrentIndexChanged: {
             if (modeSelectComboBox.enabled && stockSelectComboBox.enabled)
-                salesRequest.post("sales/change_mode/json",
+                receiveRequest.post("receivings/change_mode/json",
                                   {
                                       mode: modeSelectComboBoxModel.get(modeSelectComboBox.currentIndex).mode,
-                                      stock_location: stockSelectComboBoxModel.get(stockSelectComboBox.currentIndex).stock_id
+                                      stock_source: stockSelectComboBoxModel.get(stockSelectComboBox.currentIndex).stock_id
                                   },
                                   function(code, jsonStr){
                                       modeChangedSound.play();
@@ -301,7 +288,7 @@ Page {
         id: barcodeTextField
         font.pixelSize: 20
         anchors.left: modeSelectComboBox.right
-        anchors.top: custSelectButton.bottom
+        anchors.top: supplierSelectButton.bottom
         anchors.topMargin: 4
         anchors.leftMargin: 4
         width: parent.width - 316
@@ -319,7 +306,7 @@ Page {
                 barcodeTextCleared = false
             }
             else {
-                salesRequest.get("items/search",
+                receiveRequest.get("items/search",
                                  {"search": barcodeTextField.text, order:"asc", limit: 10, start_date: new Date(2010, 1, 1).toISOString(), end_date: new Date().toISOString(), "filters": []},
                                  function(code, jsonStr){updateSearchItemList(JSON.parse(jsonStr))});
             }
@@ -331,7 +318,7 @@ Page {
             text: "Ürünler"
             height: parent.height
             font.pixelSize: 20
-            width: 120
+            width: 100
             z:100
             Keys.onReturnPressed: {
                 clicked();
@@ -450,20 +437,21 @@ Page {
     ComboBox {
         id: stockSelectComboBox
         anchors.right: parent.right
-        anchors.top: custSelectButton.bottom
+        anchors.top: supplierSelectButton.bottom
         anchors.topMargin: 4
         anchors.rightMargin: 4
         model:ListModel{id: stockSelectComboBoxModel}
+        enabled: stockSelectComboBoxModel.count > 1
         height: 50
         font.pixelSize: 24
         width: 150
         placeholderText: "Stok"
         onCurrentIndexChanged: {
             if (stockSelectComboBox.enabled && modeSelectComboBox.enabled)
-                salesRequest.post("sales/change_mode/json",
+                receiveRequest.post("receivings/change_mode/json",
                                   {
                                       mode: modeSelectComboBoxModel.get(modeSelectComboBox.currentIndex).mode,
-                                      stock_location: stockSelectComboBoxModel.get(stockSelectComboBox.currentIndex).stock_id
+                                      stock_source: stockSelectComboBoxModel.get(stockSelectComboBox.currentIndex).stock_id
                                   },
                                   function(code, jsonStr){
                                       modeChangedSound.play();
@@ -476,7 +464,7 @@ Page {
         id: cartList
         width: parent.width
         anchors.top: modeSelectComboBox.bottom
-        anchors.bottom: suspendedButton.top
+        anchors.bottom: completeButton.top
         anchors.topMargin: 4
         anchors.bottomMargin: 4
         activeFocusOnTab: true
@@ -567,7 +555,7 @@ Page {
                                 var curItemModel = cartListViewModel.get(selectedItemIdx);
                                 if (curItemModel) {
                                     var newValue = parseInt(value);
-                                    salesRequest.post("sales/edit_item/" + curItemModel.cart_item_id + "/json",
+                                    receiveRequest.post("receivings/edit_item/" + curItemModel.cart_item_id + "/json",
                                                       {quantity: newValue, price: price.replace('.', ','), discount: 0, location: location}, function(code, jsonStr){
                                                           if (newValue > oldValue)
                                                               increaseItemAmtSound.play();
@@ -628,7 +616,7 @@ Page {
                                 var selectedItemIdx = container.ListView.view.currentIndex;
                                 var curItemModel = cartListViewModel.get(selectedItemIdx);
                                 if (curItemModel) {
-                                    salesRequest.get("sales/delete_item/" + curItemModel.cart_item_id + "/json",
+                                    receiveRequest.get("receivings/delete_item/" + curItemModel.cart_item_id + "/json",
                                                      function(code, jsonStr){
                                                          removeFromCartSuccessSound.play();
                                                          updateData(JSON.parse(jsonStr));
@@ -684,8 +672,9 @@ Page {
 
     Rectangle {
         anchors.bottom: parent.bottom
-        anchors.left: suspendedButton.right
+        anchors.left: parent.left
         anchors.margins: 4
+        anchors.leftMargin: 154
         width: parent.width - 316
         height: 50
 
@@ -713,33 +702,41 @@ Page {
             color: "steelblue"
         }
     }
+
     Button {
-        id:suspendedButton
+        id:cancelButton
         anchors.left: parent.left
         anchors.bottom: parent.bottom
         anchors.bottomMargin: 4
         anchors.leftMargin: 4
-        text: "Bekleyenler"
+        text: "İptal Et"
         height: 50
         width: 150
+        enabled: cartListViewModel.count > 0
         font.pixelSize: 24
         Keys.onReturnPressed: {
             clicked();
         }
-
         onClicked: {
-            suspendedPopup.open();
+            dialogPopup.confirmation("İptal Et", "İptal işlemini onayladığınızda bu alıma ait tüm bilgiler silinecek.", function(){
+                receiveRequest.post("receivings/cancel_receiving/json",{},
+                              function(code, jsonStr) {
+                                  cancelSound.play();
+                                  updateData(JSON.parse(jsonStr));
+                              });
+                });
         }
+        borderColor:"indianred"
     }
 
     Button {
-        id:paymentButton
+        id:completeButton
         anchors.right: parent.right
         anchors.bottom: parent.bottom
         anchors.bottomMargin: 4
         anchors.rightMargin: 4
         enabled: cartListViewModel.count > 0
-        text: "Ödeme"
+        text: "Tamamla"
         height: 50
         width: 150
         font.pixelSize: 24
@@ -747,15 +744,78 @@ Page {
             clicked();
         }
         onClicked: {
-            salesRequest.post("sales/change_mode/json",
-                              {
-                                  mode: totalCost.text.charAt(0) == '-'?'return': 'sale',
-                                  stock_location: stockSelectComboBoxModel.get(stockSelectComboBox.currentIndex).stock_id
-                              },
-                              function(code, jsonStr){
-                                  salePage.parent.push('Payment.qml');
+            completeSound.play();
+            paymentTypeSelectComboBox.visible = true;
+        }
+        borderColor:"mediumseagreen"
+    }
+
+    ComboBox {
+        id: paymentTypeSelectComboBox
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: 4
+        anchors.rightMargin: 4
+        model:ListModel{id: paymentTypeModel}
+        visible: false
+        height: 50
+        font.pixelSize: 24
+        width: 150
+        placeholderText: "Ödeme Şekli"
+        onCurrentIndexChanged: {
+            if (visible && currentIndex >= 0)
+                receiveRequest.post("receivings/complete/json", {payment_type: paymentTypeModel.get(currentIndex).name},
+                              function(code, jsonStr) {
+                                  var data = JSON.parse(jsonStr);
+                                  var receiving_id = parseInt(data.receiving_id.substring(5));
+                                  if (receiving_id > 0){
+                                      doPaymentSound.play();
+                                      receiptPopup.getReceipt("receivings", receiving_id, printEnabledSign.visible);
+                                      //toast.showSuccess("İşlem Tamamlandı!", 3000);
+                                  }
+                                  else {
+                                      toast.showError("İşlem tamamlanırken bir sorun meydana geldi!", 3000);
+                                  }
                               });
         }
-        borderColor:"salmon"
+    }
+
+    Button {
+        id: printOption
+        anchors.right: paymentTypeSelectComboBox.left
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: 4
+        anchors.rightMargin: 4
+        enabled: completeButton.enabled
+        width: 50
+        height: 50
+        font.family: Fonts.fontAwesomeSolid.name
+        font.pixelSize: 30
+        text: "\uF543"
+        onClicked: {
+            receiveRequest.post("receivings/set_print_after_sale", {recv_print_after_sale: !printEnabledSign.visible},
+                              function(code, jsonStr) {
+                                  if (code === "200") {
+                                      switchSound.play();
+                                      printEnabledSign.visible = !printEnabledSign.visible;
+                                      //toast.showSuccess("Yazdırma seçeneği değiştirildi!", 3000);
+                                  } else
+                                      toast.showError("Yazdırma seçeneği değiştirilemedi!", 3000);
+                              });
+        }
+
+        Text {
+            id: printEnabledSign
+            z:100
+            text: "\uF058"
+            font.family: Fonts.fontAwesomeSolid.name
+            font.pixelSize: 16
+            anchors.right: parent.right
+            anchors.top: parent.top
+            anchors.topMargin: 2
+            anchors.rightMargin: 2
+            color: "dodgerblue"
+            visible: true
+        }
     }
 }

@@ -5,24 +5,32 @@ import posapp.restrequest 1.0
 
 import "../../fonts"
 import "../controls"
+import "../popups"
+import "../helpers/helper.js" as Helper
 
 Page {
     id: accountPage
     width:  800 //parent
-    height:  440 //parent
+    height:  430 //parent
 
     title: qsTr("Alacak Hesabı")
 
     property int person_id
+    property string name
     property string phone
     property string address
     property int busyIndicatorCnt: 0
+    property var transactionSummary4Print
 
     RestRequest {
         id:accountRequest
 
         onSessionTimeout: {
-            accountsPage.parent.pop();
+            accountPage.parent.pop();
+        }
+
+        onRequestTimeout: {
+            accountPage.parent.pop();
         }
 
         onStart: {busyIndicatorCnt++; busyIndicator.running = true}
@@ -35,7 +43,7 @@ Page {
 
     Component.onCompleted: {
         phoneAndAddress.text = "Tel: "+ phone + "\nAdres: " + address;
-        selectLastTransactionsByDate.currentIndex = 6
+        selectLastTransactionsByDate.currentIndex = 4
         updateTotalDue();
     }
 
@@ -43,16 +51,22 @@ Page {
         id: receiptPopup
     }
 
+    DialogPopup {
+        id: dialogPopup
+    }
+
     function updateTotalDue() {
         accountRequest.get("customers/get_total_due/" +person_id,
                            function(code, jsonStr) {
                                var data = JSON.parse(jsonStr);
-                               totalCost.text = parseFloat(data).toFixed(2) + "₺";
+                               if (data === null)
+                                   data = "0";
+                               totalDue.text = Helper.toCurrency(data);
                            });
     }
 
     function doPayment(paymentType, paymentAmount) {
-        accountRequest.get("sales/json",
+        accountRequest.get("sales/due_payment",
                            function(code, jsonStr) {
                                var data = JSON.parse(jsonStr);
                                accountRequest.post("sales/change_mode/json",
@@ -75,9 +89,11 @@ Page {
                                                                                                           var data = JSON.parse(jsonStr);
 
                                                                                                           if (parseInt(data.sale_status) === 0 ){
-                                                                                                              selectLastTransactionsByDate.currentIndex = 6;
+                                                                                                              if (selectLastTransactionsByDate.currentIndex !== 4)
+                                                                                                                  selectLastTransactionsByDate.currentIndex = 4;
+                                                                                                              else
+                                                                                                                  getTransactions();
                                                                                                               updateTotalDue();
-                                                                                                              doPaymentPopup.visible = false;
                                                                                                               toast.showSuccess("Ödeme başarıyla yapıldı.", 3000);
                                                                                                           }
                                                                                                           else
@@ -134,36 +150,39 @@ Page {
 
     function updateData(data) {
         transactionListViewModel.clear();
-        if (data.length > 0)
-            accountName.text = data[0].customer_name;
-        for (var cnt = 0; cnt < data.length; ++cnt) {
-            var sale = data[cnt];
+        var transactions = data.transactions;
+        transactionSummary4Print = data;
+        transactionSummary4Print.transactions = [];
+        for (var cnt = 0; cnt < transactions.length; ++cnt) {
+            var sale = transactions[cnt];
 
             var saleTypeStr="Satış";
             if (sale.sale_type === "4")
                 saleTypeStr = "İade";
 
             var amountDue = parseFloat(sale.amount_due.replace(/[₺|.]/g, '').replace(',', '.'));
-
             var payments = sale.payment_type.split(',');
 
             var remainAmount = 0.0;
             var paymentAmount = 0.0;
-
             if (amountDue === 0.0) {
-                saleTypeStr = "Ödeme";
-                paymentAmount = -parseFloat(payments[0].split(' ')[1]);
+                var paymentSplit = payments[0].split(' ');
+                var paymentAmountStr = paymentSplit[paymentSplit.length-1];
+                paymentAmount = -parseFloat(paymentAmountStr);
+                saleTypeStr = "Ödeme: " + payments[0].substring(0, payments[0].length - (1 + paymentAmountStr.length));
             }
             else {
                 for (var cnt1 =0; cnt1 < payments.length; ++ cnt1)
-                    if (payments[cnt1].startsWith("Due")) {
+                    if (payments[cnt1].startsWith("Veresiye")) {
                         remainAmount = parseFloat(payments[cnt1].split(' ')[1]);
                         break;
                     }
             }
-
-            transactionListViewModel.append({id: sale["sale_id"], date: sale.sale_time, type: saleTypeStr, cost: amountDue.toFixed(2)+ "₺", payment: (saleTypeStr === "Ödeme" ? paymentAmount:(amountDue-remainAmount)).toFixed(2) + "₺", remain: remainAmount.toFixed(2)+ "₺"});
+            transactionSummary4Print["transactions"].push({date: sale.sale_time, type: saleTypeStr, amount: (saleTypeStr.startsWith("Ödeme") ? paymentAmount:amountDue).toFixed(2)});
+            transactionListViewModel.append({id: sale.sale_id, date: sale.sale_time, type: saleTypeStr, cost: amountDue.toFixed(2)+ "₺", payment: (saleTypeStr.startsWith("Ödeme") ? paymentAmount:(amountDue-remainAmount)).toFixed(2) + "₺", remain: remainAmount.toFixed(2)+ "₺"});
         }
+
+        transactionListView.currentIndex = transactionListViewModel.count -1;
     }
 
     Popup{
@@ -172,7 +191,7 @@ Page {
         height: parent.height * 0.5
         x: parent.width * 0.25
         y: parent.height * 0.2
-        z: Infinity
+        z: 200
         modal: true
         focus: true
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
@@ -255,8 +274,11 @@ Page {
                     paymentAmountField.needValidate = true;
                     if (paymentAmountField.isInvalid())
                         toast.showError("Ödeme tutarı giriniz!", 3000);
-                    else
-                        doPayment(paymentTypeCash.checked?"Cash": "Credit Card", paymentAmountField.text.replace('.', ''));
+                    else{
+                        var paymentAmount = paymentAmountField.text.replace('.', '');
+                        doPaymentPopup.visible = false;
+                        doPayment(paymentTypeCash.checked?"Nakit": "Kredi Kartı", paymentAmount);
+                    }
                 }
             }
         }
@@ -264,7 +286,7 @@ Page {
 
     SoundEffect {
         id: clickBasicSound
-        source: "../../sounds/220197-click-basic.wav"
+        source: "../../sounds/click.wav"
     }
 
     ComboBox {
@@ -345,7 +367,8 @@ Page {
         }
         Text {
             id: accountName
-            anchors.topMargin: -6
+            text: name
+            anchors.topMargin: 0
             color: "slategray"
             font.pixelSize: 24
             font.family: Fonts.fontTomorrowRegular.name
@@ -434,7 +457,7 @@ Page {
                             anchors.rightMargin: 4
                             anchors.right : transactionPayment.left
                             text: cost
-                            visible: type != "Ödeme"
+                            visible: !type.startsWith("Ödeme")
                             color: type == "Satış" ? "#545454": "crimson"
                             font.pixelSize: 20
                             font.family: Fonts.fontIBMPlexMonoRegular.name
@@ -471,7 +494,7 @@ Page {
                             anchors.rightMargin: 4
                             anchors.right : parent.right
                             text: remain
-                            visible: type != "Ödeme"
+                            visible: !type.startsWith("Ödeme")
                             color: type == "Satış" ? "#545454": "crimson"
                             font.pixelSize: 24
                             font.family: Fonts.fontIBMPlexMonoRegular.name
@@ -507,7 +530,7 @@ Page {
                             clickBasicSound.play();
                         }
 
-                        if ("Ödeme" !== transactionListViewModel.get(transactionListView.currentIndex).type)
+                        if (!transactionListViewModel.get(transactionListView.currentIndex).type.startsWith("Ödeme"))
                             receiptPopup.getReceipt("sales", transactionListViewModel.get(transactionListView.currentIndex).id);
                     }
                 }
@@ -516,9 +539,9 @@ Page {
                     name: "active"; when: container.activeFocus
                     PropertyChanges { target: content; color:"#CCD1D9"; height: 50; width: container.width - 15; anchors.leftMargin: 10; anchors.rightMargin: 15 }
                     PropertyChanges { target: transactionTime; font.pixelSize: 20; }
-                    PropertyChanges { target: transactionType; font.pixelSize: 24; }
-                    PropertyChanges { target: transactionCost; font.pixelSize: 24; }
-                    PropertyChanges { target: transactionPayment; font.pixelSize: 24; }
+                    PropertyChanges { target: transactionType; font.pixelSize: 22; }
+                    PropertyChanges { target: transactionCost; font.pixelSize: 22; }
+                    PropertyChanges { target: transactionPayment; font.pixelSize: 22; }
                     PropertyChanges { target: transactionRemain; font.pixelSize: 24; font.family: Fonts.fontIBMPlexMonoSemiBold.name }
                 }
 
@@ -563,7 +586,7 @@ Page {
             color: "indianred"
         }
         Label {
-            id: totalCost
+            id: totalDue
             anchors.top: itemNum.bottom
             anchors.topMargin: -9
             horizontalAlignment: "AlignHCenter"
@@ -581,10 +604,31 @@ Page {
         anchors.bottom: parent.bottom
         anchors.bottomMargin: 4
         anchors.leftMargin: 4
+        enabled: transactionListViewModel.count > 0
         text: "Özet Yazdır"
         height: 50
         width: 150
         font.pixelSize: 24
+        onClicked: {
+            dialogPopup.confirmation("Yazdırma Onayı", "Müşteri özeti yazdırılacak onaylıyor musunuz?", function() {
+            postRequest("print_account_summary", {
+                            company_name: transactionSummary4Print.company_name,
+                            company_address: transactionSummary4Print.company_address,
+                            company_phone: transactionSummary4Print.company_phone,
+                            transaction_time: transactionSummary4Print.transaction_time,
+                            customer: name,
+                            customer_id: person_id,
+                            transaction_history: selectLastTransactionsByDate.currentText,
+                            employee: transactionSummary4Print.employee,
+                            transactions: transactionSummary4Print.transactions,
+                            remain_amount: totalDue.text.replace(',', '.').substring(0, totalDue.text.length-1),
+                            return_policy: transactionSummary4Print.return_policy
+                        },
+                        transactionListViewModel.count * 1000 + 6000,
+                        function (){
+                            toast.showError("Özet yazdırılamadı!", 3000);
+                        })});
+        }
     }
 
     Button {

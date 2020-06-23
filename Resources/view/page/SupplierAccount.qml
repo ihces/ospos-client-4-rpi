@@ -5,15 +5,17 @@ import posapp.restrequest 1.0
 
 import "../../fonts"
 import "../controls"
+import "../popups"
 
 Page {
     id: accountPage
     width:  800 //parent
-    height:  440 //parent
+    height:  430 //parent
 
-    title: qsTr("Satıcı Hesabı")
+    title: qsTr("Alımlar")
 
     property int person_id
+    property string name
     property string phone
     property string address
     property int busyIndicatorCnt: 0
@@ -22,7 +24,11 @@ Page {
         id:accountRequest
 
         onSessionTimeout: {
-            accountsPage.parent.pop();
+            accountPage.parent.pop();
+        }
+
+        onRequestTimeout: {
+            accountPage.parent.pop();
         }
 
         onStart: {busyIndicatorCnt++; busyIndicator.running = true}
@@ -35,7 +41,7 @@ Page {
 
     Component.onCompleted: {
         phoneAndAddress.text = "Tel: "+ phone + "\nAdres: " + address;
-        selectLastTransactionsByDate.currentIndex = 6
+        selectLastTransactionsByDate.currentIndex = 4
     }
 
     ReceiptPopup {
@@ -86,8 +92,7 @@ Page {
 
     function updateData(data) {
         transactionListViewModel.clear();
-        if (data.length > 0)
-            accountName.text = data[0].supplier_name;
+
         for (var cnt = 0; cnt < data.length; ++cnt) {
             var receiving = data[cnt];
             var total = parseFloat(receiving.total.replace(/[₺|.]/g, '').replace(',', '.'));
@@ -97,7 +102,7 @@ Page {
 
     SoundEffect {
         id: clickBasicSound
-        source: "../../sounds/220197-click-basic.wav"
+        source: "../../sounds/click.wav"
     }
 
     ComboBox {
@@ -178,7 +183,8 @@ Page {
         }
         Text {
             id: accountName
-            anchors.topMargin: -6
+            text: name
+            anchors.topMargin: 0
             color: "slategray"
             font.pixelSize: 24
             font.family: Fonts.fontTomorrowRegular.name
@@ -329,8 +335,8 @@ Page {
                     name: "active"; when: container.activeFocus
                     PropertyChanges { target: content; color:"#CCD1D9"; height: 50; width: container.width - 15; anchors.leftMargin: 10; anchors.rightMargin: 15 }
                     PropertyChanges { target: transactionTime; font.pixelSize: 20; }
-                    PropertyChanges { target: transactionType; font.pixelSize: 24; }
-                    PropertyChanges { target: transactionPayment; font.pixelSize: 24; }
+                    PropertyChanges { target: transactionType; font.pixelSize: 22; }
+                    PropertyChanges { target: transactionPayment; font.pixelSize: 22; }
                     PropertyChanges { target: transactionCost; font.pixelSize: 24; font.family: Fonts.fontIBMPlexMonoSemiBold.name  }
                 }
             }

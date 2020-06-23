@@ -1,5 +1,7 @@
 import QtQuick 2.7
+import QtMultimedia 5.9
 import "../../fonts"
+import "../../sounds"
 
 /**
  * adapted from StackOverflow:
@@ -33,6 +35,12 @@ Rectangle {
         }
         animation.start();
 
+        if (type == "success")
+            successSound.play();
+        else if (type == "error")
+            errorSound.play();
+        else
+            warningSound.play();
     }
 
     property bool selfDestroying: false  // whether this Toast will self-destroy when it is finished
@@ -49,6 +57,21 @@ Rectangle {
     property string type
 
     property real margin: 10
+
+    SoundEffect {
+        id: successSound
+        source: "../../sounds/success.wav"
+    }
+
+    SoundEffect {
+        id: warningSound
+        source: "../../sounds/warning.wav"
+    }
+
+    SoundEffect {
+        id: errorSound
+        source: "../../sounds/error.wav"
+    }
 
     anchors {
         left: parent.left

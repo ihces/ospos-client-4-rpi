@@ -5,16 +5,20 @@ import posapp.restrequest 1.0
 
 import "../../fonts"
 import "../controls"
+import "../popups"
+import "../helpers/helper.js" as Helper
 
 Page {
     id: accountsPage
     width:  800 //parent
-    height:  440 //parent
+    height:  430 //parent
 
     title: qsTr("Hesaplar")
 
     property int selectedPersonId: -2
     property int busyIndicatorCnt: 0
+
+    property var person_info
 
     ToastManager{
         id: toast
@@ -27,24 +31,28 @@ Page {
             accountsPage.parent.pop();
         }
 
+        onRequestTimeout: {
+            accountsPage.parent.pop();
+        }
+
         onStart: {busyIndicatorCnt++; busyIndicator.running = true}
         onEnd: {if (--busyIndicatorCnt == 0)busyIndicator.running = false}
     }
 
     function savePerson() {
-        var person = {
-            first_name: nameTextField.text.trim(),
-            last_name: surnameTextField.text.trim(),
-            company_name: companyTextField.text.trim(),
-            phone_number: phoneTextField.text.trim(),
-            email: mailTextField.text.trim(),
-            address_1: addressTextField.text.trim(),
-            comments: commentTextField.text.trim(),
-            employee_id: 1
-        };
+        person_info.first_name = nameTextField.text.trim();
+        person_info.last_name= surnameTextField.text.trim();
+        person_info.company_name= companyTextField.text.trim();
+        person_info.phone_number= phoneTextField.text.trim();
+        person_info.email= mailTextField.text.trim();
+        person_info.address_1= addressTextField.text.trim();
+        person_info.comments= commentTextField.text.trim();
 
-        accountsRequest.post(getAccountTypeDir() + '/save/' + selectedPersonId, person, function(code, jsonStr){
+        //if (getAccountTypeDir() === "suppliers")
+        //    person_info.acency_name = "";
+        accountsRequest.post(getAccountTypeDir() + '/save/' + selectedPersonId, person_info, function(code, jsonStr){
             var response = JSON.parse(jsonStr);
+
             if (response.success) {
                 selectedPersonId = parseInt(response.id);
                 getPeople();
@@ -54,16 +62,6 @@ Page {
             else
                 toast.showError(response.message, 3000);
         });
-    }
-
-    function anyDescendantHasActiveFocus(ancestor) {
-        let item = appWindow.activeFocusItem;
-        while (item) {
-            if (item === ancestor)
-                return true;
-            item = item.parent;
-        }
-        return false;
     }
 
     function getPeople() {
@@ -83,10 +81,11 @@ Page {
                 peopleListView.forceActiveFocus();
             }
         }
+
+        searchTextField.forceActiveFocus();
     }
 
     function openEditDelete(personId) {
-        console.log(personId + ' ' + selectedPersonId);
         if (selectedPersonId === personId && editDelete.visible)
             return;
         selectedPersonId = typeof personId !== 'undefined' ? personId : -1;
@@ -103,7 +102,6 @@ Page {
     }
 
     function updateEditDeleteFields(personId) {
-
         accountsRequest.get(getAccountTypeDir() + "/view/"+personId+"/json", function(code, jsonStr){updateEditDeleteFieldsResponse(JSON.parse(jsonStr))});
     }
 
@@ -116,12 +114,24 @@ Page {
         mailTextField.text = data.person_info.email;
         addressTextField.text = data.person_info.address_1;
         commentTextField.text = data.person_info.comments;
+        if (isAccountTypeCustomer())
+            data.person_info.date = data.person_info.date.replace('\/', '/');
+        person_info = data.person_info;
     }
 
     function clearRequiredFieldsValidation() {
         companyTextField.needValidate = false;
         nameTextField.needValidate = false;
         surnameTextField.needValidate = false;
+        phoneTextField.needValidate = false;
+        mailTextField.needValidate = false;
+    }
+
+    function deletePersonConfirmation() {
+        dialogPopup.confirmation((isAccountTypeCustomer()?"Müşteri":"Tedarikçi") + " Silme", "Seçili " + (isAccountTypeCustomer()?"müşteriyi":"satıcıyı") + " silmek istediğinizden emin misiniz?", function(){
+            editDelete.visible = false;
+            deletePerson();
+        });
     }
 
     function deletePerson() {
@@ -146,7 +156,7 @@ Page {
         anchors.leftMargin: 4
         model:ListModel{
             ListElement{name:"Müşteri"}
-            ListElement{name:"Satıcı"}
+            ListElement{name:"Tedarikçi"}
         }
         placeholderText: "Hesap Türü"
         height: 50
@@ -162,17 +172,8 @@ Page {
         }
     }
 
-    MessageDialog {
-        id: deleteDialog
-        title: (isAccountTypeCustomer()?"Müşteri":"Satıcı") + " Silme"
-        text: "Seçili " + (isAccountTypeCustomer()?"müşteriyi":"satıcıyı") + " silmek istediğinizden emin misiniz?"
-        icon: StandardIcon.Question
-        standardButtons: StandardButton.Yes | StandardButton.No
-        onYes: {
-            editDelete.visible = false;
-            deletePerson();
-        }
-        onNo: deleteDialog.visible = false
+    DialogPopup {
+        id: dialogPopup
     }
 
     TextField {
@@ -185,7 +186,10 @@ Page {
         width: parent.width - 316
         height: 50
         font.family: Fonts.fontOrbitronRegular.name
-        placeholderText: (isAccountTypeCustomer()?"Müşteri":"Satıcı") + " Ara"
+        placeholderText: (isAccountTypeCustomer()?"Müşteri":"Tedarikçi") + " Ara"
+        onTextChanged: {
+            getPeople();
+        }
     }
 
     Button {
@@ -194,7 +198,7 @@ Page {
         anchors.top: parent.top
         anchors.topMargin: 4
         anchors.rightMargin: 4
-        text: "Yeni " + (isAccountTypeCustomer()?"Müşteri":"Satıcı");
+        text: "Yeni " + (isAccountTypeCustomer()?"Müşteri":"Tedarikçi");
         height: 50
         width: 150
         font.pixelSize: 24
@@ -236,10 +240,10 @@ Page {
             }
             cacheBuffer: 200
             onActiveFocusChanged: {
-                if (!activeFocus && !anyDescendantHasActiveFocus(editDelete))
+                if (!activeFocus && !Helper.anyDescendantHasActiveFocus(editDelete))
                     editDelete.visible = false;
             }
-            onCurrentIndexChanged: {console.log(currentIndex);
+            onCurrentIndexChanged: {
                 if (activeFocus)
                     openEditDelete(peopleListViewModel.get(currentIndex).id);
             }
@@ -262,29 +266,12 @@ Page {
                             id: idText
                             text: id
                             color: "#545454"
-                            font.pixelSize: 20
+                            font.pixelSize: 18
                             horizontalAlignment: Text.AlignHCenter
                             verticalAlignment: Text.AlignVCenter
                             font.family: Fonts.fontRubikRegular.name
-                            width: parent.width/4
+                            width: 150
                             anchors.left: parent.left
-                            anchors.top: parent.top
-                            anchors.bottom: parent.bottom
-                        }
-                        ListViewColumnLabel{
-                            text: "Firma"
-                            labelOf: companyText
-                        }
-                        Text {
-                            id: companyText
-                            text: companyName
-                            color: "#545454"
-                            font.pixelSize: 20
-                            font.family: Fonts.fontRubikRegular.name
-                            width: parent.width/4
-                            anchors.left: idText.right
-                            verticalAlignment: Text.AlignVCenter
-                            horizontalAlignment: Text.AlignLeft
                             anchors.top: parent.top
                             anchors.bottom: parent.bottom
                         }
@@ -296,10 +283,10 @@ Page {
                             id: nameText
                             text: name
                             color: "#545454"
-                            font.pixelSize: 20
+                            font.pixelSize: 18
                             font.family: Fonts.fontRubikRegular.name
-                            width: parent.width/4
-                            anchors.left: companyText.right
+                            width: (parent.width - 150)/7 * 3
+                            anchors.left: idText.right
                             verticalAlignment: Text.AlignVCenter
                             horizontalAlignment: Text.AlignLeft
                             anchors.top: parent.top
@@ -316,9 +303,26 @@ Page {
                             anchors.left : nameText.right
                             text: surname
                             color: "#545454"
-                            font.pixelSize: 24
+                            font.pixelSize: 18
                             font.family: Fonts.fontRubikRegular.name
-                            width: parent.width / 4
+                            width: (parent.width - 150)/7 * 2
+                            anchors.top: parent.top
+                            anchors.bottom: parent.bottom
+                        }
+                        ListViewColumnLabel{
+                            text: "Firma"
+                            labelOf: companyText
+                        }
+                        Text {
+                            id: companyText
+                            text: companyName
+                            color: "#545454"
+                            font.pixelSize: 18
+                            font.family: Fonts.fontRubikRegular.name
+                            width: (parent.width - 150)/7 * 2
+                            anchors.right: parent.right
+                            verticalAlignment: Text.AlignVCenter
+                            horizontalAlignment: Text.AlignRight
                             anchors.top: parent.top
                             anchors.bottom: parent.bottom
                         }
@@ -330,12 +334,10 @@ Page {
                     hoverEnabled: true
 
                     onClicked: {
-                        console.log(peopleListView.currentIndex +" " +index);
                         if (peopleListView.currentIndex == index && !editDelete.visible)
                             openEditDelete(peopleListViewModel.get(index).id);
-                        peopleListView.currentIndex = index;
                         container.forceActiveFocus();
-                        editDelete.visible = true;
+                        peopleListView.currentIndex = index;
                         listMenu.height = 160
                     }
                     onDoubleClicked: {
@@ -344,6 +346,9 @@ Page {
                         accountsPage.parent.push(isAccountTypeCustomer()?'Account.qml': 'SupplierAccount.qml',
                                                  {
                                                      person_id:  peopleListViewModel.get(index).id,
+                                                     name:  isAccountTypeCustomer()?(peopleListViewModel.get(index).name + " " +
+                                                            peopleListViewModel.get(index).surname):
+                                                            peopleListViewModel.get(index).companyName,
                                                      phone: peopleListViewModel.get(index).phone,
                                                      address:  peopleListViewModel.get(index).address
                                                  })
@@ -353,10 +358,10 @@ Page {
                 states: State {
                     name: "active"; when: container.activeFocus
                     PropertyChanges { target: content; color:"#CCD1D9"; width: container.width - 15; height:50; anchors.leftMargin: 10; anchors.rightMargin: 15;}
-                    PropertyChanges { target: idText; font.pixelSize: 24; }
-                    PropertyChanges { target: companyText; font.pixelSize: 24; }
-                    PropertyChanges { target: nameText; font.pixelSize: 24; }
-                    PropertyChanges { target: surnameText; font.pixelSize: 24; }
+                    PropertyChanges { target: idText; font.pixelSize: 22; }
+                    PropertyChanges { target: companyText; font.pixelSize: 22; }
+                    PropertyChanges { target: nameText; font.pixelSize: 22; }
+                    PropertyChanges { target: surnameText; font.pixelSize: 22; }
                 }
 
                 transitions: Transition {
@@ -399,6 +404,7 @@ Page {
             anchors.topMargin: 4
             width: parent.width / 3 - 5.665
             placeholderText: "Firma"
+            maximumLength: 32
         }
 
         TextField {
@@ -410,6 +416,7 @@ Page {
             anchors.topMargin: 4
             width: parent.width / 3 - 5.665
             placeholderText: "Adı"
+            maximumLength: 32
         }
 
         TextField {
@@ -421,6 +428,7 @@ Page {
             anchors.topMargin: 4
             width: parent.width / 3 - 5.665
             placeholderText: "Soyadı"
+            maximumLength: 32
         }
 
         TextField {
@@ -431,6 +439,10 @@ Page {
             anchors.topMargin: 4
             width: parent.width / 3 - 5.665
             placeholderText: "Telefon"
+            maximumLength: 32
+            validator: RegExpValidator{
+                regExp: /\(?([0-9]{3})\)?([ .-]?)([0-9]{3})\2([0-9]{4})/
+            }
         }
 
         TextField {
@@ -441,6 +453,10 @@ Page {
             anchors.topMargin: 4
             width: parent.width / 3 - 5.665
             placeholderText: "E-Posta"
+            maximumLength: 64
+            validator: RegExpValidator{
+                regExp: /^\S+@\S+\.\S+$/
+            }
         }
 
         TextField {
@@ -478,7 +494,18 @@ Page {
             width: 150
             font.pixelSize: 24
             onClicked: {
-                deleteDialog.visible=true;
+                if (getAccountTypeDir() === "customers") {
+                    accountsRequest.get("customers/get_total_due/" +selectedPersonId,
+                                   function(code, jsonStr) {
+                                       var due = parseFloat(JSON.parse(jsonStr));
+                                       if (due < -0.0001 || due > 0.0001)
+                                           toast.showError("Müşteri hesabı aktif olduğunda silme işlemi yapılamıyor.", 3000);
+                                       else
+                                           deletePersonConfirmation();
+                                   });
+                }
+                else
+                    deletePersonConfirmation();
             }
         }
 
@@ -497,9 +524,13 @@ Page {
                     companyTextField.needValidate = true;
                 nameTextField.needValidate = true;
                 surnameTextField.needValidate = true;
+                phoneTextField.needValidate = true;
+                mailTextField.needValidate = true;
 
-                if(nameTextField.isInvalid() || surnameTextField.isInvalid() || (!isAccountTypeCustomer() && companyTextField.isInvalid()))
-                    toast.showError("Kırmızı Alanlar Boş Bırakılamaz!", 3000);
+                if(nameTextField.isInvalid() || surnameTextField.isInvalid() ||
+                        (!isAccountTypeCustomer() && companyTextField.isInvalid()) ||
+                        phoneTextField.isInvalid() || mailTextField.isInvalid())
+                    toast.showError("Kırmızı Alanlar Hatalı!", 3000);
                 else
                     savePerson();
             }
